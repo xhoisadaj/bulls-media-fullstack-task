@@ -37,7 +37,14 @@ class TableSetup
             Cache::forget($key);
         }
 
-        return Cache::remember($key, 300, fn () => $this->fetcher->fetch($tab, withFormulas: true));
+        // The cache only stores plain arrays (Laravel doesn't unserialize objects), so the grids are cached and rebuilt.
+        $grids = Cache::remember($key, 300, function () use ($tab): array {
+            $values = $this->fetcher->fetch($tab, withFormulas: true);
+
+            return ['raw' => $values->raw, 'formatted' => $values->formatted, 'formulas' => $values->formulas];
+        });
+
+        return new TabValues($grids['raw'], $grids['formatted'], $grids['formulas']);
     }
 
     /**
