@@ -126,7 +126,7 @@ class GoogleConnection extends Page
         ]);
     }
 
-    private function editClientAction(): Action
+    public function editClientAction(): Action
     {
         return Action::make('editClient')
             ->label('Set OAuth client')
@@ -154,7 +154,7 @@ class GoogleConnection extends Page
             });
     }
 
-    private function disconnectAction(): Action
+    public function disconnectAction(): Action
     {
         return Action::make('disconnect')
             ->label('Disconnect')
@@ -169,7 +169,7 @@ class GoogleConnection extends Page
             });
     }
 
-    private function setApiKeyAction(): Action
+    public function setApiKeyAction(): Action
     {
         return Action::make('setApiKey')
             ->label(GoogleSetting::current()->secret('api_key') ? 'Replace API key' : 'Set API key')
@@ -184,7 +184,7 @@ class GoogleConnection extends Page
             });
     }
 
-    private function removeApiKeyAction(): Action
+    public function removeApiKeyAction(): Action
     {
         return Action::make('removeApiKey')
             ->label('Remove')
