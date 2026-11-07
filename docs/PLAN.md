@@ -1,5 +1,15 @@
 # Final Plan: Google Sheets → MySQL Sync
 
+> **Implementation notes** (where the built app differs from or refines this plan):
+> - The `files` table is called `spreadsheets` (model `Spreadsheet`), to avoid clashing with Laravel's `File` facade.
+> - Rejection memory for new and modified rows is kept on the rejected pending change itself (its fingerprint), not in a `rejected_fingerprint` column on the record.
+> - Text columns are read from the displayed value (this keeps leading zeros); numbers and dates from the raw value. That's two batch reads per file.
+> - A table is located when a block of header cells holds at least half of its known headers, so a missing column is reported as "missing", not as "table not found".
+> - Mass-removal guard: more than half of the rows **and** at least 3 rows. Override it with "Sync anyway" / `--allow-mass-removal`.
+> - System ID mode writes IDs right after the read (while row positions are fresh), not after approval.
+> - Headers that appear in the sheet become unmapped source columns automatically, so their values are kept for a later backfill.
+> - **Demo mode** (`php artisan sheets:demo`) reads JSON spreadsheets through the same gateway interface, so the app can be explored without a Google account.
+
 ## 1. What we're building
 
 A Laravel + MySQL web app where an admin:
