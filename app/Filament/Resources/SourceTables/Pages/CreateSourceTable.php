@@ -14,6 +14,7 @@ use App\Models\SourceColumn;
 use App\Models\SourceTable;
 use App\Models\Tab;
 use App\Sync\TableSetup;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -107,6 +108,8 @@ class CreateSourceTable extends CreateRecord
             Step::make('Columns & identity')
                 ->description('Types, keys and review')
                 ->schema([
+                    Hidden::make('header_row')->required(),
+                    Hidden::make('start_column')->required(),
                     TextInput::make('name')->required()->maxLength(255),
                     Repeater::make('columns')
                         ->label('Columns (types are suggested from the data; confirm them)')
@@ -129,24 +132,14 @@ class CreateSourceTable extends CreateRecord
                     Select::make('end_rule')->options(EndRule::class)->default(EndRule::FirstEmptyRow)->required()->live(),
                     TextInput::make('end_row')->label('Last row')->numeric()->minValue(1)
                         ->visible(fn (Get $get) => SourceTableForm::enumValue($get('end_rule')) === EndRule::FixedRow->value),
-                ])
-                ->afterValidation(function (Get $get) {
-                    if (SourceTableForm::enumValue($get('identity_mode')) !== IdentityMode::Key->value) {
-                        return;
-                    }
-
-                    $types = collect($get('columns'))->mapWithKeys(fn ($c) => [$c['header'] => SourceTableForm::enumValue($c['type'])])->all();
-                    $problems = app(TableSetup::class)->keyProblems(Tab::query()->findOrFail($get('tab_id')), (int) $get('header_row'), (int) $get('start_column'), $get('key_headers') ?? [], $types);
-
-                    if ($problems !== []) {
-                        throw ValidationException::withMessages(['data.key_headers' => 'This key is not unique: '.implode(' ', $problems).' Combine columns or use another identity mode.']);
-                    }
-                }),
+                ]),
         ];
     }
 
     protected function handleRecordCreation(array $data): Model
     {
+        $this->assertKeyIsUnique($data);
+
         return DB::transaction(function () use ($data) {
             $columns = $data['columns'] ?? [];
 
@@ -179,6 +172,26 @@ class CreateSourceTable extends CreateRecord
 
             return $table;
         });
+    }
+
+    /**
+     * The key must be unique and never empty in the current data. Checked on Create (the last
+     * wizard step has no "next" to hook into).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function assertKeyIsUnique(array $data): void
+    {
+        if (SourceTableForm::enumValue($data['identity_mode'] ?? null) !== IdentityMode::Key->value) {
+            return;
+        }
+
+        $types = collect($data['columns'] ?? [])->mapWithKeys(fn ($c) => [$c['header'] => SourceTableForm::enumValue($c['type'])])->all();
+        $problems = app(TableSetup::class)->keyProblems(Tab::query()->findOrFail($data['tab_id']), (int) $data['header_row'], (int) $data['start_column'], $data['key_headers'] ?? [], $types);
+
+        if ($problems !== []) {
+            throw ValidationException::withMessages(['data.key_headers' => 'This key is not unique: '.implode(' ', $problems).' Combine columns or use another identity mode.']);
+        }
     }
 
     protected function getRedirectUrl(): string
