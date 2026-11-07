@@ -24,6 +24,7 @@ for i in $(seq 1 60); do
 done
 
 php artisan migrate --force
+php artisan sheets:admin "${ADMIN_EMAIL:-admin@example.com}" --password="${ADMIN_PASSWORD:-password}" >/dev/null
 php artisan storage:link >/dev/null 2>&1 || true
 
 mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache
