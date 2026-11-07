@@ -3,8 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: sheets-sync-app
-    container_name: sheets-sync-app
+
     ports:
       - "8000:80"
     environment:
@@ -22,7 +21,6 @@ services:
 
   db:
     image: mysql:8.4
-    container_name: sheets-sync-db
     environment:
       MYSQL_DATABASE: sheets_sync
       MYSQL_USER: sheets
