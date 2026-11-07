@@ -124,6 +124,8 @@ it('serves the full admin pages over HTTP', function () {
     foreach (['/admin', '/admin/spreadsheets', '/admin/source-tables', '/admin/mappings', '/admin/pending-changes', '/admin/structure-alerts', '/admin/sync-runs', '/admin/managed-tables', '/admin/google-connection'] as $url) {
         $this->get($url)->assertOk();
     }
+
+    $this->get('/admin')->assertSee('.ss-table', escape: false);
 });
 
 it('rejects an OAuth callback whose state does not match', function () {

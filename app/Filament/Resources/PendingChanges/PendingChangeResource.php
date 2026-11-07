@@ -13,6 +13,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
@@ -81,6 +82,7 @@ class PendingChangeResource extends Resource
                     ->color('gray')
                     ->modalHeading(fn (PendingChange $record) => ucfirst($record->type->value).' row'.($record->sheet_row ? ' (sheet row '.$record->sheet_row.')' : ''))
                     ->modalContent(fn (PendingChange $record) => view('filament.change-detail', ['change' => $record]))
+                    ->modalWidth(Width::ThreeExtraLarge)
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
                 Action::make('approve')

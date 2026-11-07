@@ -9,6 +9,7 @@ use App\Sync\TabFetcher;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 
 class EditMapping extends EditRecord
@@ -25,6 +26,7 @@ class EditMapping extends EditRecord
                 ->icon(Heroicon::OutlinedEye)
                 ->color('gray')
                 ->modalHeading('What this mapping writes (first 10 rows of the sheet)')
+                ->modalWidth(Width::SevenExtraLarge)
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close')
                 ->modalContent(fn () => view('filament.mapping-preview', $this->previewData())),
