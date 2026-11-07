@@ -36,7 +36,7 @@ done
 
 log() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m!! %s\033[0m\n' "$*"; }
-random_secret() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c "${1:-24}"; }
+random_secret() { head -c 512 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-"${1:-24}"; }
 
 # Starts or reloads a service with systemd when available, otherwise with `service` (containers).
 svc() {
@@ -45,7 +45,7 @@ svc() {
     systemctl enable "$name" >/dev/null 2>&1 || true
     systemctl "$action" "$name"
   else
-    service "$name" "$action" >/dev/null 2>&1 || service "$name" start
+    service "$name" "$action" >/dev/null 2>&1 || service "$name" start >/dev/null 2>&1 || service "$name" status >/dev/null 2>&1
   fi
 }
 
@@ -107,6 +107,10 @@ fi
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 DEFAULT_URL="http://${SERVER_IP:-localhost}"
 [ "$APP_PORT" != "80" ] && DEFAULT_URL="${DEFAULT_URL}:${APP_PORT}"
+EXISTING_URL="$(get_env APP_URL)"
+if [ -z "${APP_URL:-}" ] && [ -n "$EXISTING_URL" ] && [ "$EXISTING_URL" != "http://localhost:8000" ]; then
+  APP_URL="$EXISTING_URL"
+fi
 APP_URL="${APP_URL:-$DEFAULT_URL}"
 
 set_env APP_ENV production
@@ -221,6 +225,6 @@ else
   printf '  Login:         %s (existing account, password unchanged)\n' "$ADMIN_EMAIL"
 fi
 printf '  Redirect URI:  %s/google/callback   (register it on your Google OAuth client)\n' "$APP_URL"
-printf '  Daily sync:    %s (server time), plus "Sync now" in the panel\n\n' "$(php artisan config:show sync.daily_at 2>/dev/null | awk '{print $NF}' || echo 02:00)"
+printf '  Daily sync:    %s (server time), plus "Sync now" in the panel\n\n' "$(get_env SYNC_DAILY_AT | grep . || echo 02:00)"
 printf 'Next: follow docs/GOOGLE_API.md, then enter the credentials in Settings → Google connection\n'
 printf '      (or run: sudo -u www-data php artisan google:configure).\n'
