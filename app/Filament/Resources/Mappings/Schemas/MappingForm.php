@@ -7,6 +7,7 @@ use App\Filament\Resources\Mappings\MappingResource;
 use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Models\ManagedTable;
 use App\Models\Mapping;
+use App\Models\MappingColumn;
 use App\Models\SourceColumn;
 use App\Models\SourceTable;
 use App\Sync\SchemaManager;
@@ -81,7 +82,7 @@ class MappingForm
 
             Section::make('Columns')
                 ->columnSpanFull()
-                ->description('Each row saves one sheet column into a database column: type any name and pick the type (the recommended one is preselected). Removing a row only stops syncing it; the database column and its data stay. To add an empty column that no sheet column fills, use Target tables → Add column.')
+                ->description('Each row saves one sheet column into a database column. Saved rows are locked: a database column is never renamed or retyped. To stop syncing a column, remove its row (the column and its data stay). To add one, use "Map a sheet column": type any name and pick the type (the recommended one is preselected).')
                 ->schema([
                     Text::make(fn (Get $get): ?HtmlString => self::overview(self::targetTable($get), $get('source_table_id'), $get('columns') ?? []))
                         ->visible(fn (Get $get): bool => self::targetTable($get) !== null),
@@ -121,6 +122,8 @@ class MappingForm
                                 ))
                                 ->required()
                                 ->distinct()
+                                ->disabled(fn (?MappingColumn $record): bool => self::isSaved($record))
+                                ->dehydrated(fn (?MappingColumn $record): bool => ! self::isSaved($record))
                                 ->live()
                                 ->afterStateUpdated(function ($state, Get $get, Set $set) {
                                     $column = SourceColumn::query()->find($state);
@@ -139,6 +142,8 @@ class MappingForm
                                 ->label('Database column')
                                 ->hiddenLabel()
                                 ->placeholder('any name, e.g. product_name')
+                                ->disabled(fn (?MappingColumn $record): bool => self::isSaved($record))
+                                ->dehydrated(fn (?MappingColumn $record): bool => ! self::isSaved($record))
                                 ->datalist(fn (Get $get): array => array_keys(self::existingColumns(self::targetTable($get, '../../'))))
                                 ->required()
                                 ->distinct()
@@ -166,12 +171,22 @@ class MappingForm
                                         $component->state(self::recommendedType(self::targetTable($get, '../../'), $get('target_column'), $column)?->value);
                                     }
                                 })
-                                ->disabled(fn (Get $get): bool => self::existingType(self::targetTable($get, '../../'), $get('target_column')) !== null)
-                                ->dehydrated(),
-                            Text::make(fn (Get $get): HtmlString => self::typeNote(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column'), $get('target_type'))),
+                                ->disabled(fn (Get $get, ?MappingColumn $record): bool => self::isSaved($record) || self::existingType(self::targetTable($get, '../../'), $get('target_column')) !== null)
+                                ->dehydrated(fn (?MappingColumn $record): bool => ! self::isSaved($record)),
+                            Text::make(fn (Get $get, ?MappingColumn $record): HtmlString => self::isSaved($record)
+                                ? new HtmlString('<span class="ss-muted">Saved. Locked; remove the row to stop syncing it.</span>')
+                                : self::typeNote(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column'), $get('target_type'))),
                         ]),
                 ]),
         ]);
+    }
+
+    /**
+     * A row that is already saved: its sheet column, database column and type are fixed.
+     */
+    public static function isSaved(?MappingColumn $record): bool
+    {
+        return $record?->exists ?? false;
     }
 
     /**

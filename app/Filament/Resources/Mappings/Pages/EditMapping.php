@@ -2,13 +2,17 @@
 
 namespace App\Filament\Resources\Mappings\Pages;
 
+use App\Enums\TriggerType;
+use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Filament\Resources\Mappings\MappingResource;
 use App\Google\Exceptions\GoogleAccessException;
+use App\Jobs\SyncSpreadsheetJob;
 use App\Sync\SheetReader;
 use App\Sync\TabFetcher;
 use App\Sync\TargetWriter;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
@@ -22,8 +26,21 @@ class EditMapping extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('syncNow')
+                ->label('Sync now')
+                ->icon(Heroicon::OutlinedArrowPath)
+                ->action(function () {
+                    SyncSpreadsheetJob::start($this->record->sourceTable->tab->spreadsheet, TriggerType::Manual);
+                    Notification::make()->title('Syncing the data from Google…')->success()->send();
+                    $this->redirect(ManagedTableResource::getUrl('browse', ['record' => $this->record->managed_table_id]), navigate: true);
+                }),
+            Action::make('viewData')
+                ->label('View data')
+                ->icon(Heroicon::OutlinedTableCells)
+                ->color('gray')
+                ->url(fn () => ManagedTableResource::getUrl('browse', ['record' => $this->record->managed_table_id])),
             Action::make('preview')
-                ->label('Preview')
+                ->label('Preview (compare with the sheet)')
                 ->icon(Heroicon::OutlinedEye)
                 ->color('gray')
                 ->modalHeading('What this mapping writes (first 10 rows of the sheet)')

@@ -258,3 +258,19 @@ it('opens the existing mapping when the sheet table already saves into the chose
     expect(array_intersect(array_keys($options), $used))->toBe([])
         ->and($options)->toContain('notes');
 });
+
+it('keeps saved mapping rows locked: renaming the database column is ignored, no column is added', function () {
+    $london = SourceTable::query()->where('name', 'London orders')->first();
+    $mapping = Mapping::query()->where('source_table_id', $london->id)->whereHas('managedTable', fn ($q) => $q->where('name', 'sales'))->first();
+    $before = Schema::getColumnListing('sales');
+
+    $page = Livewire::test(EditMapping::class, ['record' => $mapping->getRouteKey()]);
+    $columns = $page->get('data.columns');
+    $first = array_key_first($columns);
+    $columns[$first]['target_column'] = 'renamed_column';
+
+    $page->set('data.columns', $columns)->call('save');
+
+    expect($mapping->columns()->pluck('target_column')->all())->not->toContain('renamed_column')
+        ->and(Schema::getColumnListing('sales'))->toEqualCanonicalizing($before);
+});
