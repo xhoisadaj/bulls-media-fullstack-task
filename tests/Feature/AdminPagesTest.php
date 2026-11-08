@@ -1,6 +1,7 @@
 <?php
 
 use App\Filament\Pages\GoogleConnection;
+use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Filament\Resources\ManagedTables\Pages\BrowseManagedTable;
 use App\Filament\Resources\ManagedTables\Pages\ListManagedTables;
 use App\Filament\Resources\Mappings\MappingResource;
@@ -273,4 +274,14 @@ it('keeps saved mapping rows locked: renaming the database column is ignored, no
 
     expect($mapping->columns()->pluck('target_column')->all())->not->toContain('renamed_column')
         ->and(Schema::getColumnListing('sales'))->toEqualCanonicalizing($before);
+});
+
+it('syncs from the mapping page and opens the table data', function () {
+    $mapping = Mapping::query()->whereHas('managedTable', fn ($q) => $q->where('name', 'sales'))->first();
+
+    Livewire::test(EditMapping::class, ['record' => $mapping->getRouteKey()])
+        ->callAction('syncNow')
+        ->assertRedirect(ManagedTableResource::getUrl('browse', ['record' => $mapping->managed_table_id]));
+
+    expect($mapping->sourceTable->tab->spreadsheet->syncRuns()->count())->toBeGreaterThan(0);
 });
