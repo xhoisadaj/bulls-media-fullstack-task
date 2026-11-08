@@ -34,5 +34,18 @@ services:
       timeout: 5s
       retries: 30
 
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: sheets
+      PMA_PASSWORD: secret
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   db-data:

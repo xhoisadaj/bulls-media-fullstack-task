@@ -30,6 +30,8 @@ docker compose exec app php artisan sheets:demo    # optional: load demo data, n
 
 Open **http://localhost:8000/admin** and log in with **admin@example.com / password**.
 
+To look at the database, open phpMyAdmin at **http://localhost:8080**. It logs in automatically as the app's database user and only listens on your own machine.
+
 Useful commands:
 
 ```bash
