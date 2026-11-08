@@ -9,6 +9,7 @@ use App\Google\Contracts\SheetsGateway;
 use App\Google\Exceptions\GoogleAccessException;
 use App\Google\SpreadsheetImporter;
 use App\Jobs\SyncSpreadsheetJob;
+use App\Models\GoogleSetting;
 use App\Models\Spreadsheet;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
@@ -21,6 +22,13 @@ use Illuminate\Validation\ValidationException;
 class ListSpreadsheets extends ListRecords
 {
     protected static string $resource = SpreadsheetResource::class;
+
+    private static function canListFiles(): bool
+    {
+        $settings = GoogleSetting::current();
+
+        return $settings->use_demo_data || $settings->secret('refresh_token') !== null;
+    }
 
     protected function getHeaderActions(): array
     {
@@ -40,6 +48,9 @@ class ListSpreadsheets extends ListRecords
                 ->label('Fetch from Google')
                 ->icon(Heroicon::OutlinedCloudArrowDown)
                 ->color('gray')
+                // Listing files needs a Google account (OAuth). An API key can only open a sheet it is given.
+                ->disabled(fn (): bool => ! self::canListFiles())
+                ->tooltip(fn (): ?string => self::canListFiles() ? null : 'Needs a connected Google account (Settings → Google connection). With an API key, use "Add by URL" with a sheet shared as "Anyone with the link".')
                 ->modalDescription('Spreadsheets in your connected Google account. Tick the ones to track.')
                 ->schema([
                     CheckboxList::make('files')
