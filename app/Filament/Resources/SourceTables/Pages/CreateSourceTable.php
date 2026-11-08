@@ -5,18 +5,24 @@ namespace App\Filament\Resources\SourceTables\Pages;
 use App\Enums\ColumnType;
 use App\Enums\EndRule;
 use App\Enums\IdentityMode;
-use App\Filament\Resources\Mappings\MappingResource;
+use App\Enums\TriggerType;
+use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Filament\Resources\SourceTables\SourceTableResource;
 use App\Google\A1;
 use App\Google\Exceptions\GoogleAccessException;
+use App\Jobs\SyncSpreadsheetJob;
+use App\Models\ManagedTable;
+use App\Models\Mapping;
 use App\Models\SourceColumn;
 use App\Models\SourceTable;
 use App\Models\Tab;
+use App\Sync\SchemaManager;
 use App\Sync\TableSetup;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -27,15 +33,15 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Components\Wizard\Step;
-use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
 /**
- * "Set up a table": pick a tab → pick a detected table (or give its position) → confirm
- * column types, identity and review mode.
+ * "Add a sheet table", one flow from sheet to database: pick a tab → pick a detected table (or give
+ * its position) → pick the database table → name and type each column once, choose identity and
+ * review mode. Create sets everything up and starts the first sync.
  */
 class CreateSourceTable extends CreateRecord
 {
@@ -43,14 +49,14 @@ class CreateSourceTable extends CreateRecord
 
     protected static string $resource = SourceTableResource::class;
 
-    protected static ?string $title = 'Set up a table';
+    protected static ?string $title = 'Add a sheet table';
 
     public function mount(): void
     {
         parent::mount();
 
         if ($tab = request()->integer('tab')) {
-            $this->form->fill(['tab_id' => $tab, 'identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review', 'end_rule' => EndRule::FirstEmptyRow->value]);
+            $this->form->fill(['tab_id' => $tab, 'identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review', 'end_rule' => EndRule::FirstEmptyRow->value, 'target_mode' => ManagedTable::query()->exists() ? 'existing' : 'new']);
         }
     }
 
@@ -107,29 +113,82 @@ class CreateSourceTable extends CreateRecord
 
                     $set('header_row', $row);
                     $set('start_column', $column);
-                    $set('columns', $columns);
+                    $set('columns', array_map(fn (array $c): array => $c + ['save' => true, 'target' => app(SchemaManager::class)->suggestName($c['header'])], $columns));
+                    $set('new_table_name', $get('new_table_name') ?: app(SchemaManager::class)->suggestName($tab->spreadsheet->name));
                     $set('name', $get('name') ?: $tab->name.' at '.TableSetup::position($row, $column));
                 }),
 
-            Step::make('Columns & identity')
-                ->description('Types, keys and review')
+            Step::make('Save to')
+                ->description('The database table')
+                ->schema([
+                    Radio::make('target_mode')
+                        ->label('Save the rows into')
+                        ->options(['new' => 'A new database table', 'existing' => 'An existing table (e.g. add a second file to sales)'])
+                        ->required()
+                        ->live(),
+                    TextInput::make('new_table_name')
+                        ->label('New table name')
+                        ->placeholder('sales')
+                        ->helperText('Lowercase letters, digits and _. Created when you click Create.')
+                        ->visible(fn (Get $get): bool => $get('target_mode') === 'new')
+                        ->required(fn (Get $get): bool => $get('target_mode') === 'new')
+                        ->rule(fn () => function (string $attribute, mixed $value, \Closure $fail) {
+                            if ($error = app(SchemaManager::class)->nameError((string) $value, 'Table name')) {
+                                $fail($error);
+                            } elseif (app(SchemaManager::class)->isManaged((string) $value)) {
+                                $fail('Table "'.$value.'" already exists. Choose "An existing table".');
+                            }
+                        }),
+                    Select::make('managed_table_id')
+                        ->label('Table')
+                        ->options(fn () => ManagedTable::query()->orderBy('name')->pluck('name', 'id'))
+                        ->visible(fn (Get $get): bool => $get('target_mode') === 'existing')
+                        ->required(fn (Get $get): bool => $get('target_mode') === 'existing')
+                        ->helperText('Columns with the same name are filled; the others are added.'),
+                ]),
+
+            Step::make('Columns')
+                ->description('Names, types and options')
                 ->schema([
                     Hidden::make('header_row')->required(),
                     Hidden::make('start_column')->required(),
-                    TextInput::make('name')->required()->maxLength(255),
                     Repeater::make('columns')
-                        ->label('Columns (types are suggested from the data; confirm them)')
+                        ->label('Columns of the sheet table')
+                        ->helperText('Each sheet column is saved under the database name you type, as the type you choose (suggested from the data). Untick "Save" to skip a column. "Compare" off = the value is saved but edits to it don\'t count as changes.')
                         ->addable(false)
                         ->deletable(false)
                         ->reorderable(false)
-                        ->columns(12)
+                        ->table([
+                            TableColumn::make('Sheet column'),
+                            TableColumn::make('Save'),
+                            TableColumn::make('Database column'),
+                            TableColumn::make('Type'),
+                            TableColumn::make('Compare'),
+                            TableColumn::make('First values in the sheet'),
+                        ])
                         ->schema([
-                            TextInput::make('header')->disabled()->dehydrated()->columnSpan(3),
-                            Select::make('type')->options(ColumnType::class)->required()->columnSpan(3),
-                            Toggle::make('compare')->label('Compare')->inline(false)->columnSpan(2)
-                                ->hintIcon(Heroicon::OutlinedInformationCircle, 'On: a change in this column marks the row as modified. Off: the value is stored but ignored when looking for changes.'),
-                            Text::make(fn (Get $get): HtmlString => self::sampleCells($get('samples') ?? [], $get('warning')))
-                                ->columnSpan(4),
+                            TextInput::make('header')->label('Sheet column')->hiddenLabel()->disabled()->dehydrated(),
+                            Toggle::make('save')->label('Save')->hiddenLabel()->default(true)->live(),
+                            TextInput::make('target')
+                                ->label('Database column')
+                                ->hiddenLabel()
+                                ->datalist(fn (Get $get): array => array_keys(self::existingColumns($get('../../target_mode'), $get('../../managed_table_id'))))
+                                ->required(fn (Get $get): bool => (bool) $get('save'))
+                                ->disabled(fn (Get $get): bool => ! $get('save'))
+                                ->dehydrated()
+                                ->live(onBlur: true)
+                                ->rule(fn (Get $get) => function (string $attribute, mixed $value, \Closure $fail) use ($get) {
+                                    if ($get('save') && ($error = app(SchemaManager::class)->nameError((string) $value, 'Column'))) {
+                                        $fail($error);
+                                    }
+                                }),
+                            Select::make('type')->label('Type')->hiddenLabel()->options(ColumnType::class)->required()->live(),
+                            Toggle::make('compare')->label('Compare')->hiddenLabel(),
+                            Text::make(fn (Get $get): HtmlString => self::sampleCells(
+                                $get('samples') ?? [],
+                                $get('warning'),
+                                self::typeConflict($get('../../target_mode'), $get('../../managed_table_id'), $get('save') ? $get('target') : null, $get('type')),
+                            )),
                         ]),
                     ...SourceTableForm::identityFields(
                         fn (Get $get) => collect($get('columns') ?? [])->pluck('header', 'header')->all(),
@@ -138,17 +197,36 @@ class CreateSourceTable extends CreateRecord
                     Select::make('end_rule')->options(EndRule::class)->default(EndRule::FirstEmptyRow)->required()->live(),
                     TextInput::make('end_row')->label('Last row')->numeric()->minValue(1)
                         ->visible(fn (Get $get) => SourceTableForm::enumValue($get('end_rule')) === EndRule::FixedRow->value),
+                    TextInput::make('name')->label('Name in the app')->helperText('Just a label for this sheet table in the app.')->required()->maxLength(255),
                 ]),
         ];
     }
 
+    /**
+     * Creates everything in one go: the sheet table and its columns, the database table (or picks the
+     * existing one), the column mapping, the schema; then starts the first sync, which imports all rows.
+     */
     protected function handleRecordCreation(array $data): Model
     {
         $this->assertKeyIsUnique($data);
 
-        return DB::transaction(function () use ($data) {
-            $columns = $data['columns'] ?? [];
+        $columns = array_values($data['columns'] ?? []);
+        $saved = array_values(array_filter($columns, fn (array $c): bool => (bool) ($c['save'] ?? false)));
+        $tableName = ($data['target_mode'] ?? 'new') === 'new'
+            ? trim((string) ($data['new_table_name'] ?? ''))
+            : (string) ManagedTable::query()->find($data['managed_table_id'] ?? null)?->name;
 
+        if ($saved === []) {
+            throw ValidationException::withMessages(['data.columns' => 'Tick "Save" for at least one column.']);
+        }
+
+        $plan = array_map(fn (array $c): array => ['target' => trim((string) $c['target']), 'type' => ColumnType::from(SourceTableForm::enumValue($c['type']))], $saved);
+
+        if ($errors = app(SchemaManager::class)->validatePlan($tableName, $plan)) {
+            throw ValidationException::withMessages(['data.columns' => $errors]);
+        }
+
+        $mapping = DB::transaction(function () use ($data, $columns, $tableName) {
             $table = SourceTable::query()->create([
                 'tab_id' => $data['tab_id'],
                 'name' => $data['name'],
@@ -163,7 +241,7 @@ class CreateSourceTable extends CreateRecord
 
             $ids = [];
 
-            foreach (array_values($columns) as $i => $column) {
+            foreach ($columns as $i => $column) {
                 $ids[$column['header']] = SourceColumn::query()->create([
                     'source_table_id' => $table->id,
                     'header' => $column['header'],
@@ -176,8 +254,23 @@ class CreateSourceTable extends CreateRecord
             $table->update(['key_column_ids' => array_values(array_map(fn ($h) => $ids[$h], $data['key_headers'] ?? []))]);
             Tab::query()->whereKey($data['tab_id'])->update(['is_active' => true]);
 
-            return $table;
+            $managed = ManagedTable::query()->firstOrCreate(['name' => $tableName], ['created_by' => auth()->id()]);
+            $mapping = Mapping::query()->create(['source_table_id' => $table->id, 'managed_table_id' => $managed->id, 'is_active' => true]);
+
+            foreach ($columns as $column) {
+                if ($column['save'] ?? false) {
+                    $mapping->columns()->create(['source_column_id' => $ids[$column['header']], 'target_column' => trim((string) $column['target'])]);
+                }
+            }
+
+            return $mapping;
         });
+
+        // DDL commits implicitly in MySQL, so the schema is changed after the data transaction.
+        app(SchemaManager::class)->apply($mapping);
+        SyncSpreadsheetJob::dispatch($mapping->sourceTable->tab->spreadsheet, TriggerType::Manual);
+
+        return $mapping->sourceTable;
     }
 
     /**
@@ -202,12 +295,12 @@ class CreateSourceTable extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return MappingResource::getUrl('create', ['source_table' => $this->record->id]);
+        return ManagedTableResource::getUrl('browse', ['record' => $this->record->mappings()->firstOrFail()->managed_table_id]);
     }
 
     protected function getCreatedNotificationTitle(): ?string
     {
-        return 'Table saved. Now map its columns to a database table.';
+        return 'Saved. The first sync started: all rows appear here in a few seconds (refresh the page).';
     }
 
     /**
@@ -263,19 +356,51 @@ class CreateSourceTable extends CreateRecord
     }
 
     /**
+     * @return array<string, string> columns of the chosen existing table (name => MySQL type)
+     */
+    private static function existingColumns(mixed $mode, mixed $managedTableId): array
+    {
+        if ($mode !== 'existing') {
+            return [];
+        }
+
+        $name = ManagedTable::query()->find($managedTableId)?->name;
+
+        return $name === null ? [] : app(SchemaManager::class)->targetColumns($name);
+    }
+
+    /**
+     * A warning when the column already exists in the chosen table with a type the values don't fit.
+     */
+    private static function typeConflict(mixed $mode, mixed $managedTableId, mixed $target, mixed $type): ?string
+    {
+        $existing = blank($target) ? null : (self::existingColumns($mode, $managedTableId)[trim((string) $target)] ?? null);
+        $columnType = ColumnType::tryFrom(SourceTableForm::enumValue($type) ?? '');
+
+        if ($existing === null || $columnType === null) {
+            return null;
+        }
+
+        return app(SchemaManager::class)->fits($existing, $columnType)
+            ? null
+            : 'The table already has "'.trim((string) $target).'" as '.$existing.': '.$columnType->getLabel().' doesn\'t fit. Use another name or type.';
+    }
+
+    /**
      * The first values of a column as they appear in the sheet, plus any warning.
      *
      * @param  list<string>  $samples
      */
-    private static function sampleCells(array $samples, ?string $warning): HtmlString
+    private static function sampleCells(array $samples, ?string $warning, ?string $conflict = null): HtmlString
     {
         $cells = $samples === []
             ? '<span class="ss-null">no values in the first rows</span>'
             : implode('', array_map(fn (string $value) => '<span class="ss-chip ss-mono">'.e($value).'</span>', $samples));
 
         return new HtmlString(
-            '<div class="ss"><p class="ss-muted">First values in the sheet</p><div class="ss-chips" style="margin-top:0.35rem">'.$cells.'</div>'
-            .($warning ? '<p class="ss-error" style="margin-top:0.5rem">⚠ '.e($warning).'</p>' : '').'</div>'
+            '<div class="ss"><div class="ss-chips">'.$cells.'</div>'
+            .($warning ? '<p class="ss-error" style="margin-top:0.5rem">⚠ '.e($warning).'</p>' : '')
+            .($conflict ? '<p class="ss-error" style="margin-top:0.5rem">⚠ '.e($conflict).'</p>' : '').'</div>'
         );
     }
 

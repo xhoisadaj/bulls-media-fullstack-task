@@ -32,7 +32,7 @@ class TabsRelationManager extends RelationManager
             ])
             ->recordActions([
                 Action::make('setUpTable')
-                    ->label('Set up a table')
+                    ->label('Add a sheet table')
                     ->icon(Heroicon::OutlinedPlusCircle)
                     ->visible(fn (Tab $record) => $record->is_present)
                     ->url(fn (Tab $record) => SourceTableResource::getUrl('create', ['tab' => $record->id])),

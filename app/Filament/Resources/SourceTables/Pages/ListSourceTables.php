@@ -12,6 +12,6 @@ class ListSourceTables extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [CreateAction::make()->label('Set up a table')];
+        return [CreateAction::make()->label('Add a sheet table')];
     }
 }

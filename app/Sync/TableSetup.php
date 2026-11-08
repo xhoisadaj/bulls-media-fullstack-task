@@ -13,7 +13,7 @@ use App\Sync\Data\TableSpec;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Helpers for the "Set up a table" wizard: detect tables, suggest column types,
+ * Helpers for the "Add a sheet table" wizard: detect tables, suggest column types,
  * warn about volatile formulas and errors, and check that a key is unique.
  */
 class TableSetup

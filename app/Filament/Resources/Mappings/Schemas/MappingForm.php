@@ -40,7 +40,7 @@ class MappingForm
                 ->columns(2)
                 ->schema([
                     Select::make('source_table_id')
-                        ->label('Source table')
+                        ->label('Sheet table')
                         ->options(fn () => SourceTable::query()->with('tab.spreadsheet')->get()->mapWithKeys(fn (SourceTable $t) => [$t->id => $t->label()]))
                         ->searchable()
                         ->required()
@@ -48,7 +48,7 @@ class MappingForm
                         ->disabledOn('edit'),
                     Toggle::make('is_active')->label('Active')->default(true)->inline(false),
                     Radio::make('target_mode')
-                        ->label('Target table')
+                        ->label('Database table')
                         ->options(['existing' => 'An existing table created by the sync', 'new' => 'Create a new table'])
                         ->default(fn () => ManagedTable::query()->exists() ? 'existing' : 'new')
                         ->live()

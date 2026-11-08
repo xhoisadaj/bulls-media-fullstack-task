@@ -46,6 +46,6 @@ class SourceTablesTable
                 DeleteAction::make()->modalDescription('Its stored records and pending changes are removed. Target tables keep their data.'),
             ])
             ->emptyStateHeading('No tables set up yet')
-            ->emptyStateDescription('Open a spreadsheet, enable a tab, and click "Set up a table".');
+            ->emptyStateDescription('Open a spreadsheet, enable a tab, and click "Add a sheet table".');
     }
 }

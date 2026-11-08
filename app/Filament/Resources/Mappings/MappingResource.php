@@ -25,6 +25,8 @@ class MappingResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
+    protected static ?string $navigationLabel = 'Column mappings';
+
     public static function form(Schema $schema): Schema
     {
         return MappingForm::configure($schema);

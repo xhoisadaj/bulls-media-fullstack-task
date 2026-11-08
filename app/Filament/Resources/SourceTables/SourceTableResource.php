@@ -26,7 +26,9 @@ class SourceTableResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
-    protected static ?string $modelLabel = 'source table';
+    protected static ?string $modelLabel = 'sheet table';
+
+    protected static ?string $navigationLabel = 'Sheet tables';
 
     protected static ?string $recordTitleAttribute = 'name';
 
