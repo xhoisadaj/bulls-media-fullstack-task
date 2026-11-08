@@ -19,10 +19,10 @@ Changing the schema at runtime has risks, so the schema manager is strict:
 
 ## 2. A source records layer between the sheet and the target tables
 
-Every sheet row is stored once as a **source record**: a permanent ID, every column's normalized value (JSON), and a fingerprint. Target tables are projections of these records, linked by `_record_id`.
+Every sheet row is stored once as a **source record**: a permanent ID, every column's normalized value (JSON), and a fingerprint. Target tables are projections of these records and stay minimal: our row ID (`id` = `R-101`) plus the mapped columns. Origin, sync times and history stay in the app's own tables.
 
 - **Match once, write many.** One decision per row, applied to every table that uses it.
-- **Split tables stay linked.** `people_names` and `people_contacts` share `_record_id`.
+- **Split tables stay linked.** `people_names` and `people_contacts` share the same `id` (R-101).
 - **Backfill.** Values of not-yet-mapped columns are already stored, so mapping a column later fills it without guessing.
 - **The approved state lives in the database.** The review inbox shows how the sheet differs from it.
 
@@ -56,7 +56,7 @@ The task asks for daily automatic saving, and I also wanted nothing risky to hap
 - **Review** (default): every change waits for approval. The **first import** of a table is the exception: there is nothing to compare with yet, so all its rows are saved right away; review starts with the next sync.
 - **Auto:** new, modified and restored rows are applied automatically.
 
-**Removals always wait for a human**, in both modes. Removals are soft deletes. A **mass-removal guard** stops a table when more than half of its rows (and at least 3) would be removed, which catches a cleared sheet or the wrong table being found. Rejected changes are remembered so they aren't raised every day, and a pending change is **superseded** when the row changes again before review.
+**Removals always wait for a human**, in both modes. An approved removal deletes the row from the target tables; its last values stay in the source record, so a returning row is restored under the same ID. A **mass-removal guard** stops a table when more than half of its rows (and at least 3) would be removed, which catches a cleared sheet or the wrong table being found. Rejected changes are remembered so they aren't raised every day, and a pending change is **superseded** when the row changes again before review.
 
 ## 7. OAuth by default, API key as fallback, no service account
 

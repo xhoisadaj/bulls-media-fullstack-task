@@ -34,7 +34,7 @@
         @switch($change->type->value)
             @case('new') A row that isn't stored yet. @break
             @case('modified') Same key, different values. Highlighted columns changed. @break
-            @case('removed') This row is no longer in the sheet. Approving sets _removed_at (soft delete); the data stays. @break
+            @case('removed') This row is no longer in the sheet. Approving deletes it from the database table(s); its last values stay in the app's history. @break
             @case('restored') A previously removed row is back in the sheet. @break
         @endswitch
         @if ($change->sourceTable->identity_mode->value === 'content' && in_array($change->type->value, ['new', 'removed']))

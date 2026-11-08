@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ManagedTables\Pages;
 
 use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Models\ManagedTable;
+use App\Models\SourceRecord;
 use App\Models\SourceTable;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
@@ -11,7 +12,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -48,7 +48,7 @@ class BrowseManagedTable extends Page implements HasTable
         /** @var ManagedTable $record */
         $record = $this->getRecord();
         $name = $record->name;
-        $columns = Schema::hasTable($name) ? Schema::getColumnListing($name) : [];
+        $columns = Schema::hasTable($name) ? array_values(array_unique(['id', ...Schema::getColumnListing($name)])) : [];
 
         return $table
             ->records(function (int $page, int $recordsPerPage, array $filters) use ($name, $columns): LengthAwarePaginator {
@@ -56,14 +56,15 @@ class BrowseManagedTable extends Page implements HasTable
                     return new LengthAwarePaginator([], 0, $recordsPerPage, $page);
                 }
 
-                $removed = $filters['removed']['value'] ?? null;
-
                 $source = $filters['source']['value'] ?? null;
 
-                $query = DB::table($name)->orderBy('id')
-                    ->when(filled($source), fn ($q) => $q->where('_source_table_id', $source))
-                    ->when($removed === '0' || $removed === null, fn ($q) => $q->whereNull('_removed_at'))
-                    ->when($removed === '1', fn ($q) => $q->whereNotNull('_removed_at'));
+                // IDs are R-101, R-102, …: order by length first so R-1000 comes after R-999.
+                $query = DB::table($name)->orderByRaw('CHAR_LENGTH(id), id')
+                    ->when(filled($source), fn ($q) => $q->whereIn('id', SourceRecord::query()
+                        ->where('source_table_id', $source)
+                        ->pluck('id')
+                        ->map(fn (int $id) => SourceRecord::codeFor($id))
+                        ->all()));
 
                 $paginator = $query->paginate($recordsPerPage, ['*'], 'page', $page);
 
@@ -75,20 +76,18 @@ class BrowseManagedTable extends Page implements HasTable
                 );
             })
             ->columns(array_map(
-                fn (string $column) => TextColumn::make($column)->fontFamily(str_starts_with($column, '_') ? 'mono' : null)
-                    ->toggleable(isToggledHiddenByDefault: in_array($column, ['_source_table_id', '_synced_at'], true)),
+                fn (string $column) => TextColumn::make($column)->fontFamily($column === 'id' ? 'mono' : null),
                 $columns,
             ))
             ->filters([
                 SelectFilter::make('source')
                     ->label('From file')
-                    ->options(fn (): array => $columns === [] ? [] : SourceTable::query()
-                        ->whereIn('id', DB::table($name)->distinct()->pluck('_source_table_id'))
+                    ->options(fn (): array => SourceTable::query()
+                        ->whereHas('mappings', fn ($q) => $q->where('managed_table_id', $record->id))
                         ->with('tab.spreadsheet')
                         ->get()
                         ->mapWithKeys(fn (SourceTable $table) => [$table->id => $table->label()])
                         ->all()),
-                TernaryFilter::make('removed')->label('Removed rows')->placeholder('Hide removed')->trueLabel('Only removed')->falseLabel('Hide removed'),
             ])
             ->paginated([25, 50, 100]);
     }

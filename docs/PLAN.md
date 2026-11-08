@@ -6,6 +6,7 @@
 > - Text columns are read from the displayed value (this keeps leading zeros); numbers and dates from the raw value. That's two batch reads per file.
 > - A table is located when a block of header cells holds at least half of its known headers, so a missing column is reported as "missing", not as "table not found".
 > - Mass-removal guard: more than half of the rows **and** at least 3 rows. Override it with "Sync anyway" / `--allow-mass-removal`.
+> - **Target tables are minimal:** only `id` (our row ID, `R-101`) plus the mapped columns. The `_record_id`, `_source_table_id`, `_synced_at` and `_removed_at` columns described below were dropped; approved removals delete the row (its values stay in `source_records`).
 > - **System ID mode changed:** nothing is written to the sheet and no write access is requested. The ID lives only in our database; rows match by content, and an edited row is paired with its stored record when it stays between the same unchanged neighbours (always reviewed, never auto-applied). The `_sync_id` column, `SystemIdWriter` and the write scope described below were removed. See DECISIONS.md §3.
 > - Headers that appear in the sheet become unmapped source columns automatically, so their values are kept for a later backfill.
 > - **Demo mode** (`php artisan sheets:demo`) reads JSON spreadsheets through the same gateway interface, so the app can be explored without a Google account.

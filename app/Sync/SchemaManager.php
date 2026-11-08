@@ -22,8 +22,8 @@ class SchemaManager
 {
     public const NAME_PATTERN = '/^[a-z][a-z0-9_]{0,63}$/';
 
-    /** Columns every managed table has; mappings can't use these names. */
-    public const SYSTEM_COLUMNS = ['id', '_record_id', '_source_table_id', '_synced_at', '_removed_at'];
+    /** The one column every managed table has: our row ID (R-101). Mappings can't use this name. */
+    public const SYSTEM_COLUMNS = ['id'];
 
     /** MySQL reserved words that would make awkward or invalid identifiers. */
     public const RESERVED = [
@@ -140,7 +140,12 @@ class SchemaManager
         $mapping->loadMissing('managedTable', 'columns.sourceColumn');
         $table = $mapping->managedTable->name;
 
-        $plan = $mapping->columns->map(fn ($c) => ['target' => $c->target_column, 'type' => $c->targetType()])->values()->all();
+        // New columns are added in the sheet's column order.
+        $plan = $mapping->columns
+            ->sortBy(fn ($c) => [$c->sourceColumn->position, $c->id])
+            ->map(fn ($c) => ['target' => $c->target_column, 'type' => $c->targetType()])
+            ->values()
+            ->all();
 
         if ($errors = $this->validatePlan($table, $plan)) {
             throw new SchemaException($errors);
@@ -150,11 +155,7 @@ class SchemaManager
 
         if (! Schema::hasTable($table)) {
             Schema::create($table, function (Blueprint $blueprint) {
-                $blueprint->id();
-                $blueprint->unsignedBigInteger('_record_id')->unique();
-                $blueprint->unsignedBigInteger('_source_table_id')->index();
-                $blueprint->timestamp('_synced_at')->nullable();
-                $blueprint->timestamp('_removed_at')->nullable()->index();
+                $blueprint->string('id', 32)->primary();
             });
 
             $this->log($mapping->managedTable->id, 'create_table', null, null, $user);
@@ -292,7 +293,7 @@ class SchemaManager
         }
 
         if (Schema::hasTable($table->name) && ($rows = DB::table($table->name)->count()) > 0) {
-            $problems[] = 'It holds '.$rows.' row(s), including removed ones.';
+            $problems[] = 'It holds '.$rows.' row(s).';
         }
 
         return $problems;

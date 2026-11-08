@@ -83,7 +83,7 @@ FILE (Google spreadsheet)
                                   │
                                   ▼
                    TARGET TABLE (MySQL, created and owned by the sync)
-                   rows linked to their source record by _record_id
+                   rows keyed by our row ID: id = R-101, R-102, …
 ```
 
 ### The sync
@@ -117,7 +117,18 @@ Sorting the sheet or moving an unchanged row changes nothing. In system ID mode,
 | Removed | waits for approval | **waits for approval** |
 | New or missing column | alert, admin decides | alert, admin decides |
 
-When a change is approved, the source record is updated first and then every target table that uses it, in one transaction. Removals are soft deletes (`_removed_at`), so data is never lost. A rejected change isn't raised again unless the row changes again.
+When a change is approved, the source record is updated first and then every target table that uses it, in one transaction. An approved removal deletes the row from the target tables; its last values stay in the source record and the change history, so nothing is lost and a returning row is restored under the same ID. A rejected change isn't raised again unless the row changes again.
+
+### Target tables are minimal
+
+A table like `sales` holds **only our row ID plus the mapped columns**:
+
+```
+id    | date       | name   | product_price | amount
+R-101 | 2026-08-11 | laptop | 1000.00       | 20
+```
+
+`id` is the permanent ID of the sheet row on our side (R-101, R-102, …, unique across all tables, so one sheet row saved into two tables has the same ID in both). Where a row came from, when it was synced and its history live in the app's own tables (`source_records`, `pending_changes`), not in yours.
 
 ### Schema changes (requirement #6)
 
@@ -137,7 +148,7 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 | 1 | Similar files, extra columns, different positions | Headers matched by name ([`TableLocator`](app/Sync/TableLocator.php), [`StructureInspector`](app/Sync/StructureInspector.php)); tables can start anywhere (e.g. H99) |
 | 2 | List of files, saved daily | [`sheets:sync`](app/Console/Commands/SyncSheetsCommand.php) scheduled daily ([`routes/console.php`](routes/console.php)), one [`SyncSpreadsheetJob`](app/Jobs/SyncSpreadsheetJob.php) per file |
 | 3 | Configuration of files, tabs, columns | DB tables `spreadsheets`, `tabs`, `source_tables`, `source_columns`, managed in the UI |
-| 4–5 | Matching file → table, renamed columns, one file → many tables | `mappings` + `mapping_columns`; [`TargetWriter`](app/Sync/TargetWriter.php) writes each mapping by `_record_id` |
+| 4–5 | Matching file → table, renamed columns, one file → many tables | `mappings` + `mapping_columns`; [`TargetWriter`](app/Sync/TargetWriter.php) writes each mapping by our row ID (`id` = `R-101`) |
 | 6 | New config column → ALTER TABLE + store data | [`SchemaManager`](app/Sync/SchemaManager.php) + [`Backfiller`](app/Sync/Backfiller.php) |
 | 7 | Google API token instructions | [docs/GOOGLE_API.md](docs/GOOGLE_API.md) |
 | 8 | Repository with setup instructions | this README |

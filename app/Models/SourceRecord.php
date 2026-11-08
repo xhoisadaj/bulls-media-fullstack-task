@@ -37,6 +37,24 @@ class SourceRecord extends Model
         $query->whereNull('removed_at');
     }
 
+    /**
+     * The row's ID as it appears in the database tables: R-101, R-102, …
+     */
+    public function code(): string
+    {
+        return self::codeFor($this->id);
+    }
+
+    public static function codeFor(int $id): string
+    {
+        return 'R-'.($id + 100);
+    }
+
+    public static function idFromCode(string $code): ?int
+    {
+        return preg_match('/^R-(\d+)$/', $code, $m) ? (int) $m[1] - 100 : null;
+    }
+
     public function isRemoved(): bool
     {
         return $this->removed_at !== null;

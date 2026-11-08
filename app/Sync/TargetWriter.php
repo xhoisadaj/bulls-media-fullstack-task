@@ -11,8 +11,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Writes source records into the target tables: each mapping takes its columns,
- * under their target names. Rows are found by _record_id.
+ * Writes source records into the target tables: each mapping takes its columns, under their
+ * target names. A target row is only our ID (R-101) plus the mapped columns; a removed row is deleted.
  */
 class TargetWriter
 {
@@ -20,25 +20,26 @@ class TargetWriter
 
     public function upsertRecord(SourceRecord $record): void
     {
+        if ($record->isRemoved()) {
+            $this->markRemoved($record);
+
+            return;
+        }
+
         foreach ($this->mappings($record->source_table_id) as $mapping) {
-            DB::table($mapping->managedTable->name)->updateOrInsert(
-                ['_record_id' => $record->id],
-                $this->payload($record, $mapping),
-            );
+            DB::table($mapping->managedTable->name)->updateOrInsert(['id' => $record->code()], $this->payload($record, $mapping));
         }
     }
 
     public function markRemoved(SourceRecord $record): void
     {
         foreach ($this->mappings($record->source_table_id) as $mapping) {
-            DB::table($mapping->managedTable->name)
-                ->where('_record_id', $record->id)
-                ->update(['_removed_at' => $record->removed_at ?? now(), '_synced_at' => now()]);
+            DB::table($mapping->managedTable->name)->where('id', $record->code())->delete();
         }
     }
 
     /**
-     * Writes every record of a source table (used after configuration changes).
+     * Writes every current record of a source table (used after configuration changes).
      */
     public function projectAll(SourceTable $table, ?Mapping $only = null): int
     {
@@ -46,11 +47,11 @@ class TargetWriter
         $written = 0;
 
         foreach ($mappings as $mapping) {
-            $updateColumns = [...$mapping->columns->pluck('target_column')->all(), '_source_table_id', '_synced_at', '_removed_at'];
+            $updateColumns = $mapping->columns->pluck('target_column')->all();
 
-            $table->records()->chunkById(500, function (Collection $records) use ($mapping, $updateColumns, &$written) {
-                $rows = $records->map(fn (SourceRecord $record) => ['_record_id' => $record->id] + $this->payload($record, $mapping))->all();
-                DB::table($mapping->managedTable->name)->upsert($rows, ['_record_id'], $updateColumns);
+            $table->records()->whereNull('removed_at')->chunkById(500, function (Collection $records) use ($mapping, $updateColumns, &$written) {
+                $rows = $records->map(fn (SourceRecord $record) => ['id' => $record->code()] + $this->payload($record, $mapping))->all();
+                DB::table($mapping->managedTable->name)->upsert($rows, ['id'], $updateColumns);
                 $written += count($rows);
             });
         }
@@ -70,11 +71,7 @@ class TargetWriter
             $payload[$column->target_column] = $this->convert($column, $value);
         }
 
-        return $payload + [
-            '_source_table_id' => $record->source_table_id,
-            '_synced_at' => now(),
-            '_removed_at' => $record->removed_at,
-        ];
+        return $payload;
     }
 
     /**

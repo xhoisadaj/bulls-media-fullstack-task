@@ -13,6 +13,7 @@ use App\Models\ManagedTable;
 use App\Models\Mapping;
 use App\Models\PendingChange;
 use App\Models\SchemaHistory;
+use App\Models\SourceRecord;
 use App\Models\StructureAlert;
 use App\Models\User;
 use App\Sync\Backfiller;
@@ -20,6 +21,7 @@ use App\Sync\ChangeApplier;
 use App\Sync\SchemaManager;
 use App\Sync\SyncRunner;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\Feature\Sync\SyncFixture;
 
 function orders(array $rows): array
@@ -98,7 +100,7 @@ it('shows an edit as removed + new in content mode, and keeps removals pending e
 
     expect($run->counts)->toMatchArray(['unchanged' => 1, 'new' => 1, 'removed' => 1])
         ->and(PendingChange::query()->where('type', ChangeType::Removed)->sole()->status)->toBe(ChangeStatus::Pending)
-        ->and(DB::table('people')->whereNull('_removed_at')->count())->toBe(3);
+        ->and(DB::table('people')->count())->toBe(3);
 });
 
 it('imports the first sync right away in review mode, then queues changes until approved', function () {
@@ -176,13 +178,14 @@ it('restores a removed row that comes back', function () {
     syncNow($fixture);
     app(ChangeApplier::class)->approve(PendingChange::query()->pending()->sole(), User::factory()->create());
 
-    expect(DB::table('sales')->where('order_id', 1002)->value('_removed_at'))->not->toBeNull();
+    expect(DB::table('sales')->where('order_id', 1002)->exists())->toBeFalse()
+        ->and(DB::table('sales')->pluck('id')->all())->toBe(['R-101']);
 
     $fixture->sheet(orders([[1001, 'Shoes', 50, 2], [1002, 'Bag', 35, 1]]));
     syncNow($fixture);
 
     expect(PendingChange::query()->where('type', ChangeType::Restored)->sole()->status)->toBe(ChangeStatus::Approved)
-        ->and(DB::table('sales')->where('order_id', 1002)->value('_removed_at'))->toBeNull();
+        ->and(DB::table('sales')->where('order_id', 1002)->value('id'))->toBe('R-102');
 });
 
 it('finds the table after rows are inserted above it and raises an info alert', function () {
@@ -281,7 +284,7 @@ it('skips the table while IMPORTRANGE is still loading', function () {
         ->and(collect($run->errors)->pluck('message')->implode(' '))->toContain('Loading');
 });
 
-it('writes one sheet row to two tables linked by _record_id', function () {
+it('writes one sheet row to two tables linked by the same R- id', function () {
     $fixture = SyncFixture::make(
         [['first_name', 'last_name', 'city', 'phone'], ['Xhoi', 'Sadaj', 'Tirana', '0692']],
         ['first_name' => ColumnType::String, 'last_name' => ColumnType::String, 'city' => ColumnType::String, 'phone' => ColumnType::String],
@@ -300,7 +303,7 @@ it('writes one sheet row to two tables linked by _record_id', function () {
 
     syncNow($fixture);
 
-    $joined = DB::table('people_names')->join('people_contacts', 'people_names._record_id', '=', 'people_contacts._record_id')
+    $joined = DB::table('people_names')->join('people_contacts', 'people_names.id', '=', 'people_contacts.id')
         ->first(['first_name', 'city', 'phone']);
 
     expect((array) $joined)->toBe(['first_name' => 'Xhoi', 'city' => 'Tirana', 'phone' => '0692']);
@@ -322,7 +325,7 @@ function systemIdFixture(): SyncFixture
 
 it('keeps system IDs on our side and pairs a row edited in place, without writing to the sheet', function () {
     $fixture = systemIdFixture();
-    $anaId = DB::table('people')->where('name', 'Ana')->value('_record_id');
+    $anaId = DB::table('people')->where('name', 'Ana')->value('id');
 
     expect(DB::table('people')->count())->toBe(4);
 
@@ -331,13 +334,13 @@ it('keeps system IDs on our side and pairs a row edited in place, without writin
     $change = PendingChange::query()->pending()->sole();
 
     expect($run->counts)->toMatchArray(['modified' => 1, 'new' => 0, 'removed' => 0, 'auto_applied' => 0])
-        ->and($change->source_record_id)->toBe($anaId)
+        ->and(SourceRecord::codeFor($change->source_record_id))->toBe($anaId)
         ->and($change->matched_by)->toBe('position')
         ->and(DB::table('people')->where('name', 'Ana')->value('amount'))->toBe(35);
 
     app(ChangeApplier::class)->approve($change, User::factory()->create());
 
-    expect(DB::table('people')->where('_record_id', $anaId)->value('amount'))->toBe(40)
+    expect(DB::table('people')->where('id', $anaId)->value('amount'))->toBe(40)
         ->and(DB::table('people')->count())->toBe(4)
         ->and($fixture->gateway->readTabs('sheet-1', ['Sales'])['Sales']->formatted[0])->toBe(['name', 'city', 'amount']);
 });
@@ -349,8 +352,8 @@ it('still pairs an edited row when a row above it is deleted', function () {
     $run = syncNow($fixture);
 
     expect($run->counts)->toMatchArray(['modified' => 1, 'removed' => 1, 'new' => 0])
-        ->and(PendingChange::query()->where('type', 'modified')->sole()->source_record_id)
-        ->toBe(DB::table('people')->where('name', 'Mira')->value('_record_id'));
+        ->and(SourceRecord::codeFor(PendingChange::query()->where('type', 'modified')->sole()->source_record_id))
+        ->toBe(DB::table('people')->where('name', 'Mira')->value('id'));
 });
 
 it('does not pair a row that was edited and moved', function () {
@@ -385,4 +388,18 @@ it('fails one file cleanly without touching data when it becomes inaccessible', 
     expect($run->status)->toBe(SyncStatus::Failed)
         ->and(StructureAlert::query()->where('type', AlertType::FileNotAccessible)->exists())->toBeTrue()
         ->and(DB::table('sales')->count())->toBe(1);
+});
+
+it('creates minimal target tables: our R- id plus the mapped columns only', function () {
+    $fixture = keyFixture([[1001, 'Shoes', 50, 2], [1002, 'Bag', 35, 1]]);
+    syncNow($fixture);
+
+    expect(Schema::getColumnListing('sales'))->toEqualCanonicalizing(['id', 'order_id', 'name', 'product_price', 'amount'])
+        ->and(DB::table('sales')->orderBy('order_id')->pluck('id')->all())->toBe(['R-101', 'R-102']);
+});
+
+it('creates target columns in the sheet column order', function () {
+    keyFixture([[1001, 'Shoes', 50, 2]]);
+
+    expect(array_column(Schema::getColumns('sales'), 'name'))->toBe(['id', 'order_id', 'name', 'product_price', 'amount']);
 });

@@ -33,6 +33,6 @@ class Mapping extends Model
 
     public function columns(): HasMany
     {
-        return $this->hasMany(MappingColumn::class);
+        return $this->hasMany(MappingColumn::class)->orderBy('id');
     }
 }

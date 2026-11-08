@@ -48,8 +48,8 @@ class ManagedTableResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->weight('semibold')->fontFamily('mono'),
-                TextColumn::make('rows')->label('Rows (active)')
-                    ->state(fn (ManagedTable $record) => Schema::hasTable($record->name) ? DB::table($record->name)->whereNull('_removed_at')->count() : 'not created'),
+                TextColumn::make('rows')->label('Rows')
+                    ->state(fn (ManagedTable $record) => Schema::hasTable($record->name) ? DB::table($record->name)->count() : 'not created'),
                 TextColumn::make('mappings_count')->counts('mappings')->label('Mappings'),
                 TextColumn::make('can_delete')->label('Delete')
                     ->state(fn (ManagedTable $record): string => app(SchemaManager::class)->dropTableProblems($record) === [] ? 'Empty, can be deleted' : 'In use')
@@ -131,7 +131,7 @@ class ManagedTableResource extends Resource
             ->color('danger')
             ->visible(fn (ManagedTable $record): bool => Schema::hasTable($record->name))
             ->modalHeading(fn (ManagedTable $record): string => 'Remove columns from '.$record->name)
-            ->modalDescription('Only empty columns that no mapping uses can be removed, so no data is lost. The sync\'s own columns (id, _record_id, …) are never listed.')
+            ->modalDescription('Only empty columns that no mapping uses can be removed, so no data is lost. The row ID column (id) is never listed.')
             ->schema(fn (ManagedTable $record): array => [
                 CheckboxList::make('columns')
                     ->label('Columns')

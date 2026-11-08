@@ -21,11 +21,7 @@ function targetTable(string $name, array $columns): ManagedTable
 {
     Schema::dropIfExists($name);
     Schema::create($name, function ($table) use ($columns) {
-        $table->id();
-        $table->unsignedBigInteger('_record_id')->unique();
-        $table->unsignedBigInteger('_source_table_id');
-        $table->timestamp('_synced_at')->nullable();
-        $table->timestamp('_removed_at')->nullable();
+        $table->string('id', 32)->primary();
 
         foreach ($columns as $column) {
             $table->string($column)->nullable();
@@ -48,7 +44,7 @@ afterEach(function () {
 
 it('removes only empty, unmapped columns and logs it', function () {
     $table = targetTable('tmp_orders', ['note', 'colour', 'size']);
-    DB::table('tmp_orders')->insert(['_record_id' => 1, '_source_table_id' => 1, 'size' => 'XL']);
+    DB::table('tmp_orders')->insert(['id' => 'R-101', 'size' => 'XL']);
 
     $usage = app(SchemaManager::class)->columnUsage($table);
 
@@ -67,7 +63,7 @@ it('refuses columns with data, system columns and mapped columns, and then drops
     Schema::table('people', fn ($t) => $t->string('spare')->nullable());
     $table = $fixture->mapping->managedTable;
 
-    expect(fn () => app(SchemaManager::class)->dropColumns($table, ['spare', 'name', '_record_id']))
+    expect(fn () => app(SchemaManager::class)->dropColumns($table, ['spare', 'name', 'id']))
         ->toThrow(fn (SchemaException $e) => expect(implode(' ', $e->errors))->toContain('mapped by Orders')->toContain('needed by the sync'));
 
     expect(Schema::getColumnListing('people'))->toContain('spare');
@@ -76,9 +72,9 @@ it('refuses columns with data, system columns and mapped columns, and then drops
 it('deletes a table only when it is empty and unmapped', function () {
     $empty = targetTable('tmp_empty_a', ['note']);
     $full = targetTable('tmp_full', ['note']);
-    DB::table('tmp_full')->insert(['_record_id' => 1, '_source_table_id' => 1, '_removed_at' => now()]);
+    DB::table('tmp_full')->insert(['id' => 'R-101']);
 
-    expect(app(SchemaManager::class)->dropTableProblems($full)[0])->toContain('1 row(s), including removed ones');
+    expect(app(SchemaManager::class)->dropTableProblems($full)[0])->toContain('1 row(s)');
 
     app(SchemaManager::class)->dropTable($empty);
 
@@ -104,7 +100,7 @@ it('deletes several empty tables at once and skips tables with rows', function (
     $a = targetTable('tmp_empty_a', []);
     $b = targetTable('tmp_empty_b', []);
     $full = targetTable('tmp_full', []);
-    DB::table('tmp_full')->insert(['_record_id' => 1, '_source_table_id' => 1]);
+    DB::table('tmp_full')->insert(['id' => 'R-101']);
 
     Livewire::test(ListManagedTables::class)
         ->callTableBulkAction('deleteEmptyTables', [$a, $b, $full], ['current_password' => 'secret-password'])
@@ -124,5 +120,5 @@ it('adds an empty column with any name and type, and rejects reserved or existin
     expect(collect(Schema::getColumns('tmp_orders'))->firstWhere('name', 'discount')['type_name'])->toBe('decimal')
         ->and($table->history()->where('action', 'add_column')->value('column_name'))->toBe('discount')
         ->and(fn () => app(SchemaManager::class)->addEmptyColumn($table, 'note', ColumnType::String))->toThrow(SchemaException::class)
-        ->and(fn () => app(SchemaManager::class)->addEmptyColumn($table, '_record_id', ColumnType::String))->toThrow(SchemaException::class);
+        ->and(fn () => app(SchemaManager::class)->addEmptyColumn($table, 'id', ColumnType::String))->toThrow(SchemaException::class);
 });

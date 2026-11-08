@@ -65,7 +65,7 @@ it('renders every admin screen with the demo data', function (string $page, ?Clo
 
 it('imports the demo right away and approves later changes from the review inbox', function () {
     expect(PendingChange::query()->pending()->count())->toBe(0)
-        ->and(DB::table('sales')->whereNull('_removed_at')->count())->toBe(6 + 4 + 3);
+        ->and(DB::table('sales')->count())->toBe(6 + 4 + 3);
 
     Artisan::call('sheets:demo-change', ['scenario' => 'delete']);
     app()->forgetScopedInstances();
@@ -77,7 +77,7 @@ it('imports the demo right away and approves later changes from the review inbox
     Livewire::test(ListPendingChanges::class)->callAction('approveAll');
 
     expect(PendingChange::query()->pending()->count())->toBe(0)
-        ->and(DB::table('sales')->whereNull('_removed_at')->count())->toBe(6 + 4 + 3 - 1);
+        ->and(DB::table('sales')->count())->toBe(6 + 4 + 3 - 1);
 });
 
 it('creates a mapping into a new table and backfills it', function () {
@@ -175,7 +175,7 @@ it('filters a target table by the file its rows came from', function () {
 
     Livewire::test(BrowseManagedTable::class, ['record' => ManagedTable::query()->where('name', 'sales')->first()->getRouteKey()])
         ->filterTable('source', $london->id)
-        ->assertCountTableRecords(DB::table('sales')->where('_source_table_id', $london->id)->whereNull('_removed_at')->count());
+        ->assertCountTableRecords($london->records()->whereNull('removed_at')->count());
 });
 
 it('saves a column under any name and with a type other than the recommended one', function () {
@@ -195,7 +195,7 @@ it('saves a column under any name and with a type other than the recommended one
         ->assertHasNoFormErrors();
 
     $types = collect(Schema::getColumns('order_texts'))->pluck('type_name', 'name');
-    $row = DB::table('order_texts')->orderBy('_record_id')->first();
+    $row = DB::table('order_texts')->orderByRaw('CHAR_LENGTH(id), id')->first();
 
     expect($types['sold_on_text'])->toBe('varchar')->and($types['whole_price'])->toBe('bigint')
         ->and($row->sold_on_text)->toMatch('/^\d{4}-\d{2}-\d{2}$/')
