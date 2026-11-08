@@ -32,7 +32,7 @@ function nextStep(Testable $component, int $from): Testable
  */
 function throughTarget(Testable $wizard, int|string $tabId, string $detected, string $table = 'wizard_orders', array $extra = []): Testable
 {
-    $wizard->fillForm(['tab_id' => $tabId]);
+    $wizard->fillForm(['spreadsheet_id' => Tab::query()->find($tabId)->spreadsheet_id, 'tab_id' => $tabId]);
     nextStep($wizard, 0)->assertHasNoFormErrors();
     $wizard->fillForm(['detected' => $detected] + $extra);
     nextStep($wizard, 1)->assertHasNoFormErrors();
@@ -97,7 +97,7 @@ it('adds a second file to an existing table, reusing matching columns', function
     $second = Tab::query()->create(['spreadsheet_id' => $this->tab->spreadsheet_id, 'google_tab_id' => 1, 'name' => 'More']);
     app(SheetsGateway::class)->setTab('sheet-w', 'More', [['order_id', 'price', 'region'], [2001, 9, 'north']], 1);
 
-    $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['tab_id' => $second->id]);
+    $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['spreadsheet_id' => $second->spreadsheet_id, 'tab_id' => $second->id]);
     nextStep($wizard, 0);
     $wizard->fillForm(['detected' => 'r1c1']);
     nextStep($wizard, 1);
@@ -132,7 +132,7 @@ it('rejects a key that is not unique', function () {
 });
 
 it('shows a preview of the tab with the chosen table highlighted', function () {
-    $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['tab_id' => $this->tab->id]);
+    $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['spreadsheet_id' => $this->tab->spreadsheet_id, 'tab_id' => $this->tab->id]);
     nextStep($wizard, 0);
     $wizard->fillForm(['detected' => 'r3c2']);
 
@@ -154,4 +154,16 @@ it('shows the first values of each column and saves system ID mode without any w
         ->assertHasNoFormErrors();
 
     expect(SourceTable::query()->sole()->identity_mode)->toBe(IdentityMode::SystemId);
+});
+
+it('only lists the tabs of the chosen spreadsheet, preselected when opened from a tab', function () {
+    $other = Spreadsheet::query()->create(['google_id' => 'sheet-other', 'name' => 'Other file']);
+    Tab::query()->create(['spreadsheet_id' => $other->id, 'google_tab_id' => 0, 'name' => 'Elsewhere']);
+
+    $this->get(CreateSourceTable::getUrl(['tab' => $this->tab->id]))->assertOk();
+
+    Livewire::withQueryParams(['tab' => $this->tab->id])
+        ->test(CreateSourceTable::class)
+        ->assertSchemaStateSet(['spreadsheet_id' => $this->tab->spreadsheet_id, 'tab_id' => $this->tab->id])
+        ->assertFormFieldExists('tab_id', fn ($field) => array_values($field->getOptions()) === ['Orders']);
 });

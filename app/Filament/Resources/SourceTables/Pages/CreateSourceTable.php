@@ -16,6 +16,7 @@ use App\Models\ManagedTable;
 use App\Models\Mapping;
 use App\Models\SourceColumn;
 use App\Models\SourceTable;
+use App\Models\Spreadsheet;
 use App\Models\Tab;
 use App\Sync\SchemaManager;
 use App\Sync\TableSetup;
@@ -56,7 +57,7 @@ class CreateSourceTable extends CreateRecord
         parent::mount();
 
         if ($tab = request()->integer('tab')) {
-            $this->form->fill(['tab_id' => $tab, 'identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review', 'end_rule' => EndRule::FirstEmptyRow->value, 'target_mode' => ManagedTable::query()->exists() ? 'existing' : 'new']);
+            $this->form->fill(['spreadsheet_id' => Tab::query()->find($tab)?->spreadsheet_id, 'tab_id' => $tab, 'identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review', 'end_rule' => EndRule::FirstEmptyRow->value, 'target_mode' => ManagedTable::query()->exists() ? 'existing' : 'new']);
         }
     }
 
@@ -66,11 +67,21 @@ class CreateSourceTable extends CreateRecord
             Step::make('Tab')
                 ->description('Which tab holds the table')
                 ->schema([
+                    Select::make('spreadsheet_id')
+                        ->label('Spreadsheet')
+                        ->options(fn () => Spreadsheet::query()->orderBy('name')->pluck('name', 'id'))
+                        ->searchable()
+                        ->required()
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set) => $set('tab_id', null)),
                     Select::make('tab_id')
                         ->label('Tab')
-                        ->options(fn () => Tab::query()->where('is_present', true)->with('spreadsheet')->get()
-                            ->mapWithKeys(fn (Tab $t) => [$t->id => $t->spreadsheet->name.' / '.$t->name]))
-                        ->searchable()
+                        ->options(fn (Get $get) => Tab::query()
+                            ->where('spreadsheet_id', $get('spreadsheet_id'))
+                            ->where('is_present', true)
+                            ->orderBy('id')
+                            ->pluck('name', 'id'))
+                        ->disabled(fn (Get $get): bool => blank($get('spreadsheet_id')))
                         ->required()
                         ->live(),
                 ]),
