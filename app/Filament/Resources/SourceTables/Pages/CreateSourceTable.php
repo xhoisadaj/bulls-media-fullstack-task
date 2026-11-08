@@ -163,9 +163,18 @@ class CreateSourceTable extends CreateRecord
                 ->schema([
                     Hidden::make('header_row')->required(),
                     Hidden::make('start_column')->required(),
+                    Text::make(new HtmlString(
+                        '<div class="ss ss-stack"><ul class="ss-list">'
+                        .'<li><span class="ss-strong">Save:</span> untick to leave a column out of the database.</li>'
+                        .'<li><span class="ss-strong">Database column / Type:</span> the name and type in the database table; the type is suggested from the data.</li>'
+                        .'<li><span class="ss-strong">Compare:</span> should an edit in this column count as a change to the row? '
+                        .'<span class="ss-strong">On</span> (normal): editing it shows the row as changed in the Review inbox. '
+                        .'<span class="ss-strong">Off</span>: the column is ignored when looking for changes and when recognising rows, and its new value is saved the next time something else in the row changes. '
+                        .'Turn it off for columns that change by themselves and would otherwise flag every row each day, e.g. a "last updated" time or a formula with TODAY() or NOW(). It is switched off automatically for those formulas.</li>'
+                        .'</ul></div>'
+                    )),
                     Repeater::make('columns')
                         ->label('Columns of the sheet table')
-                        ->helperText('Each sheet column is saved under the database name you type, as the type you choose (suggested from the data). Untick "Save" to skip a column. "Compare" off = the value is saved but edits to it don\'t count as changes.')
                         ->addable(false)
                         ->deletable(false)
                         ->reorderable(false)

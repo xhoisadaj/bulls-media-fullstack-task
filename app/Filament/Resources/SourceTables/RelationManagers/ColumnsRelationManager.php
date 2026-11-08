@@ -33,7 +33,8 @@ class ColumnsRelationManager extends RelationManager
                 ->required()
                 ->disabled(fn (?SourceColumn $record) => $record?->isMapped() ?? false)
                 ->helperText(fn (?SourceColumn $record) => $record?->isMapped() ? 'Mapped columns keep their type (changing it could lose data). Map to a new column instead.' : null),
-            Toggle::make('compare')->label('Use to detect changes'),
+            Toggle::make('compare')->label('Compare (use to detect changes)')
+                ->helperText('Off for columns that change by themselves (a "last updated" time, TODAY()/NOW() formulas): they are ignored when looking for changes, and their new value is saved the next time something else in the row changes.'),
         ]);
     }
 
