@@ -39,9 +39,11 @@ class EditSpreadsheet extends EditRecord
                     ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                     ->url(fn () => $this->record->url(), shouldOpenInNewTab: true),
                 SyncActions::syncAnyway(),
-                DeleteAction::make()
-                    ->modalDescription('The spreadsheet, its tab and table settings, and its stored records are removed. Target tables keep their data.'),
             ]),
+            DeleteAction::make()
+                ->label('Delete spreadsheet')
+                ->button()
+                ->modalDescription('The spreadsheet, its tab and table settings, and its stored records are removed. Target tables keep their data.'),
         ];
     }
 }

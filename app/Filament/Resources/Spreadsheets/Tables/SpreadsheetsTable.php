@@ -38,9 +38,9 @@ class SpreadsheetsTable
                         ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                         ->url(fn (Spreadsheet $record) => $record->url(), shouldOpenInNewTab: true),
                     SyncActions::syncAnyway(),
-                    DeleteAction::make()
-                        ->modalDescription('The spreadsheet, its tab and table settings, and its stored records are removed. Target tables keep their data.'),
                 ]),
+                DeleteAction::make()
+                    ->modalDescription('The spreadsheet, its tab and table settings, and its stored records are removed. Target tables keep their data.'),
             ])
             ->emptyStateHeading('No spreadsheets yet')
             ->emptyStateDescription('Add a sheet by its URL, or fetch the list from your Google account.');
