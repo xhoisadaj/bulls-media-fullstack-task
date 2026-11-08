@@ -1,8 +1,11 @@
 @php
-    $headers = $change->sourceTable->columns->where('header', '!=', '_sync_id')->pluck('header', 'id');
+    $headers = $change->sourceTable->columns->pluck('header', 'id');
     $changed = $change->changed_columns ?? [];
 @endphp
 <div class="ss ss-stack">
+    @if ($change->matched_by === \App\Sync\RecordMatcher::BY_POSITION)
+        <p class="ss-muted">Matched by position: no key proves this is the same row, but it sits in the same place, between the same unchanged rows. Approve if it is the same row; reject and it becomes removed + new.</p>
+    @endif
     <div class="ss-scroll">
         <table class="ss-table">
             <thead>

@@ -96,9 +96,7 @@ it('shows a preview of the tab with the chosen table highlighted', function () {
         ->assertSeeHtml('ss-grid-head');
 });
 
-it('shows the first values of each column and blocks system ID mode without write access', function () {
-    app(SheetsGateway::class)->writable = false;
-
+it('shows the first values of each column and saves system ID mode without any write access', function () {
     $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['tab_id' => $this->tab->id]);
     nextStep($wizard, 0);
     $wizard->fillForm(['detected' => 'r3c2']);
@@ -110,7 +108,7 @@ it('shows the first values of each column and blocks system ID mode without writ
     $wizard->assertSee('First values in the sheet')
         ->fillForm(['identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review'])
         ->call('create')
-        ->assertHasFormErrors(['identity_mode']);
+        ->assertHasNoFormErrors();
 
-    expect(SourceTable::query()->count())->toBe(0);
+    expect(SourceTable::query()->sole()->identity_mode)->toBe(IdentityMode::SystemId);
 });

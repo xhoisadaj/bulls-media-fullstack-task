@@ -16,8 +16,6 @@ use App\Sync\Data\TableSpec;
  */
 class SheetReader
 {
-    public const SYSTEM_ID_HEADER = '_sync_id';
-
     public function __construct(
         private readonly TableLocator $locator,
         private readonly StructureInspector $inspector,
@@ -133,10 +131,7 @@ class SheetReader
                 continue;
             }
 
-            $identity = match ($table->identity_mode) {
-                IdentityMode::Content => null,
-                default => $this->fingerprinter->identity($rowValues, $keyIds),
-            };
+            $identity = $table->identity_mode === IdentityMode::Key ? $this->fingerprinter->identity($rowValues, $keyIds) : null;
 
             $rows[] = new SheetRow($r + 1, $rowValues, $this->fingerprinter->fingerprint($rowValues, $trackedIds), $identity);
         }
@@ -150,16 +145,6 @@ class SheetReader
      */
     public function keyIds(SourceTable $table, array $columns): array
     {
-        if ($table->identity_mode === IdentityMode::SystemId) {
-            foreach ($columns as $column) {
-                if (HeaderName::normalize($column->header) === self::SYSTEM_ID_HEADER) {
-                    return [$column->id];
-                }
-            }
-
-            return [];
-        }
-
         return $table->identity_mode === IdentityMode::Key ? array_map('intval', $table->key_column_ids ?? []) : [];
     }
 }

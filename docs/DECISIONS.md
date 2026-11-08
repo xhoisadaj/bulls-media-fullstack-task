@@ -35,10 +35,12 @@ I considered similarity matching ("if 75% of the fields are equal, it's the same
 
 Instead, a row is "the same row" only when it can be **proven**:
 - a **key** the admin declares, checked for uniqueness against the data;
-- a **system ID** written into the sheet;
-- or the **content** itself (fingerprint).
+- the **content** itself (fingerprint);
+- in **system ID** mode, also the row's **place**: a stored row that disappeared and a new row that appeared are paired when they sit between the **same unchanged neighbours** (the rows above and below). Unequal numbers in the same gap → no pairing.
 
-Without an ID, an edited row is reported as **removed + new**, shown side by side, because nothing proves it's the same row. Position is never used: sorting changes nothing.
+System ID mode keeps its IDs in our database only. I first wrote a `_sync_id` column into the sheet, but that needs write access to the user's files, which is a lot to ask for a sync tool. The neighbour rule is deterministic (no score, no threshold), survives inserted and deleted rows elsewhere, and fails safe: an edited **and** moved row becomes removed + new. Because the place is a strong hint rather than proof, these pairings are labelled in the review inbox, never auto-applied, and a rejection turns them into removed + new.
+
+Content mode never pairs: an edited row is reported as **removed + new**, shown side by side. Sorting an unchanged sheet changes nothing in any mode.
 
 ## 4. Find tables and columns by header name
 

@@ -4,7 +4,6 @@ namespace App\Sync;
 
 use App\Enums\AlertType;
 use App\Enums\CredentialType;
-use App\Enums\IdentityMode;
 use App\Enums\SyncStatus;
 use App\Enums\TriggerType;
 use App\Google\A1;
@@ -36,7 +35,6 @@ class SyncRunner
         private readonly RecordMatcher $matcher,
         private readonly ChangeSetBuilder $builder,
         private readonly Backfiller $backfiller,
-        private readonly SystemIdWriter $systemIds,
         private readonly TypeGuesser $typeGuesser,
         private readonly Fingerprinter $fingerprinter,
         private readonly SyncNotifier $notifier,
@@ -246,32 +244,9 @@ class SyncRunner
 
         $rows = $read->rows;
 
-        if ($table->identity_mode === IdentityMode::SystemId) {
-            if ($this->systemIds->ensureHeader($table, $read, $tabTitle)) {
-                $values = $this->gateway->readTabs($table->tab->spreadsheet->google_id, [$tabTitle])[$tabTitle] ?? $values;
-                $table->refresh();
-                $read = $this->reader->read($table, $values, $otherHeaders);
-            }
-
-            if ($read->located->columnOf(SheetReader::SYSTEM_ID_HEADER) === null) {
-                $message = 'System ID mode needs a _sync_id column in the sheet, and it can\'t be added without Google write access. Reconnect with write access, or switch the table to Key columns or Content only.';
-                $table->markBroken($message);
-                $errors[] = ['table' => $table->name, 'message' => $message];
-
-                return [];
-            }
-
-            $rows = $this->systemIds->assign($table, $read, $tabTitle);
-            $held = count($read->rows) - count($rows);
-
-            if ($held > 0) {
-                $errors[] = ['table' => $table->name, 'message' => $held.' row(s) have no _sync_id yet and were not synced: writing IDs needs Google write access.'];
-            }
-        }
-
         $stored = $table->records()
-            ->get(['id', 'fingerprint', 'identity_value', 'removed_at'])
-            ->map(fn (SourceRecord $r) => new StoredRecord($r->id, $r->fingerprint, $r->identity_value, $r->removed_at !== null))
+            ->get(['id', 'fingerprint', 'identity_value', 'removed_at', 'sheet_row'])
+            ->map(fn (SourceRecord $r) => new StoredRecord($r->id, $r->fingerprint, $r->identity_value, $r->removed_at !== null, $r->sheet_row))
             ->all();
 
         $match = $this->matcher->match($rows, $stored, $table->identity_mode);
@@ -329,14 +304,12 @@ class SyncRunner
                 ],
             );
 
-            if (HeaderName::normalize($header) !== SheetReader::SYSTEM_ID_HEADER) {
-                StructureAlert::raise(
-                    AlertType::ColumnAdded,
-                    'New column "'.$header.'" found in '.$table->label().'. Map it to save its data.',
-                    $table,
-                    details: ['header' => $header],
-                );
-            }
+            StructureAlert::raise(
+                AlertType::ColumnAdded,
+                'New column "'.$header.'" found in '.$table->label().'. Map it to save its data.',
+                $table,
+                details: ['header' => $header],
+            );
         }
 
         $table->update(['header_names' => array_values(array_unique([...$table->header_names, ...$read->report->addedHeaders]))]);

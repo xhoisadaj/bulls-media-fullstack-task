@@ -66,7 +66,7 @@ class Backfiller
                 $record->fingerprint = $this->fingerprinter->fingerprint($record->data, $tracked);
                 $record->hash_version = $version;
 
-                if ($table->identity_mode !== IdentityMode::Content) {
+                if ($table->identity_mode === IdentityMode::Key) {
                     $record->identity_value = $this->fingerprinter->identity($record->data, $keyIds) ?? $record->identity_value;
                 } else {
                     $record->identity_value = null;
@@ -83,7 +83,7 @@ class Backfiller
 
     /**
      * Fills values of newly tracked columns from the live sheet. Rows are matched with the
-     * old configuration: by key, or by the old fingerprint in content mode. Rows edited since
+     * old configuration: by key, or by the old fingerprint in content and system ID mode. Rows edited since
      * the last sync don't match and are left to the normal sync.
      *
      * @param  list<int>  $previousTracked
@@ -112,7 +112,7 @@ class Backfiller
 
         foreach ($read->rows as $row) {
             /** @var SourceRecord|null $record */
-            $record = $table->identity_mode === IdentityMode::Content
+            $record = $table->identity_mode !== IdentityMode::Key
                 ? (empty($byFingerprint[$row->fingerprint]) ? null : array_shift($byFingerprint[$row->fingerprint]))
                 : ($row->identity !== null ? $byIdentity->get($row->identity) : null);
 

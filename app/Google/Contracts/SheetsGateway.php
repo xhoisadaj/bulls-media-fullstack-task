@@ -49,20 +49,6 @@ interface SheetsGateway
     public function readFormulas(string $spreadsheetId, string $tabTitle): array;
 
     /**
-     * Writes single cells (A1 notation inside the tab => value). Needs OAuth with write access.
-     *
-     * @param  array<string, string>  $cells
-     *
-     * @throws GoogleAccessException
-     */
-    public function writeCells(string $spreadsheetId, string $tabTitle, array $cells): void;
-
-    /**
-     * Whether writing to sheets is possible right now (OAuth connected with the write scope).
-     */
-    public function canWrite(): bool;
-
-    /**
      * Which credential served the last successful call.
      */
     public function lastCredential(): ?CredentialType;

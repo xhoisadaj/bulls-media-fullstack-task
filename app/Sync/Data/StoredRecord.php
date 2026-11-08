@@ -12,5 +12,6 @@ final readonly class StoredRecord
         public string $fingerprint,
         public ?string $identity = null,
         public bool $removed = false,
+        public ?int $sheetRow = null,
     ) {}
 }

@@ -74,12 +74,6 @@ class GoogleConnection extends Page
                             ->url(route('google.connect'))
                             ->disabled(! $settings->hasOAuthClient())
                             ->tooltip($settings->hasOAuthClient() ? null : 'Save the client ID and secret first'),
-                        Action::make('connectWrite')
-                            ->label('Connect with write access')
-                            ->color('gray')
-                            ->url(route('google.connect', ['write' => 1]))
-                            ->disabled(! $settings->hasOAuthClient())
-                            ->tooltip('Only needed for system ID mode, which writes a _sync_id column into the sheet'),
                         $this->disconnectAction(),
                     ])->columnSpanFull(),
                 ]),
@@ -228,7 +222,6 @@ class GoogleConnection extends Page
         }
 
         return collect([
-            GoogleCredentialProvider::SCOPE_SHEETS_WRITE => 'Read and write sheets',
             GoogleCredentialProvider::SCOPE_SHEETS_READ => 'Read sheets',
             GoogleCredentialProvider::SCOPE_DRIVE_LIST => 'List your spreadsheets',
         ])->filter(fn ($label, $scope) => in_array($scope, $scopes, true))->implode(' · ') ?: implode(', ', $scopes);

@@ -16,8 +16,6 @@ class GoogleCredentialProvider
 {
     public const SCOPE_SHEETS_READ = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 
-    public const SCOPE_SHEETS_WRITE = 'https://www.googleapis.com/auth/spreadsheets';
-
     public const SCOPE_DRIVE_LIST = 'https://www.googleapis.com/auth/drive.metadata.readonly';
 
     /**
@@ -52,14 +50,6 @@ class GoogleCredentialProvider
             CredentialType::ApiKey => $this->apiKeyClient(),
             CredentialType::Demo => throw new GoogleAccessException('Demo data does not use Google.', GoogleAccessException::NOT_CONFIGURED),
         };
-    }
-
-    public function hasWriteScope(): bool
-    {
-        $settings = GoogleSetting::current();
-
-        return $settings->oauth_status === ConnectionStatus::Connected
-            && in_array(self::SCOPE_SHEETS_WRITE, $settings->scopes ?? [], true);
     }
 
     /**

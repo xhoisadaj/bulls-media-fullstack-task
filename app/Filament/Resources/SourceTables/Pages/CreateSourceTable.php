@@ -50,7 +50,7 @@ class CreateSourceTable extends CreateRecord
         parent::mount();
 
         if ($tab = request()->integer('tab')) {
-            $this->form->fill(['tab_id' => $tab, 'identity_mode' => IdentityMode::Content->value, 'apply_mode' => 'review', 'end_rule' => EndRule::FirstEmptyRow->value]);
+            $this->form->fill(['tab_id' => $tab, 'identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review', 'end_rule' => EndRule::FirstEmptyRow->value]);
         }
     }
 

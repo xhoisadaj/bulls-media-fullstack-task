@@ -23,8 +23,6 @@ class GoogleAccessException extends RuntimeException
 
     public const UNAVAILABLE = 'unavailable';
 
-    public const WRITE_NOT_ALLOWED = 'write_not_allowed';
-
     /**
      * @param  array<string, string>  $attempts  credential => reason message, when a fallback was tried
      */

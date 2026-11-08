@@ -30,6 +30,7 @@ class ChangeSetBuilder
         $outcome = new ChangeSetOutcome;
         $records = $table->records()->get()->keyBy('id');
         $trackedIds = $table->trackedColumns()->pluck('id')->all();
+        $this->unpairRejected($table, $match);
 
         $removable = collect($match->removed)->reject(fn (int $id) => $records[$id]?->keep_on_removal)->values();
         $activeCount = $records->whereNull('removed_at')->count();
@@ -57,7 +58,7 @@ class ChangeSetBuilder
         }
 
         foreach ($match->modified as $pair) {
-            $desired[] = $this->describe(ChangeType::Modified, $records[$pair['record']], $pair['row'], $trackedIds);
+            $desired[] = $this->describe(ChangeType::Modified, $records[$pair['record']], $pair['row'], $trackedIds, $pair['by'] ?? null);
         }
 
         foreach ($match->restored as $pair) {
@@ -86,13 +87,42 @@ class ChangeSetBuilder
 
         if ($table->apply_mode === ApplyMode::Auto) {
             foreach ($live as $change) {
-                if ($change->type->canAutoApply() && $this->applier->approve($change, null)) {
+                // A position pairing is a strong hint, not proof: it always waits for a human.
+                if ($change->type->canAutoApply() && $change->matched_by === null && $this->applier->approve($change, null)) {
                     $outcome->counts['auto_applied']++;
                 }
             }
         }
 
         return $outcome;
+    }
+
+    /**
+     * A position pairing the admin rejected ("not the same row") falls back to removed + new,
+     * so the row isn't stuck between the two.
+     */
+    private function unpairRejected(SourceTable $table, MatchResult $match): void
+    {
+        $match->modified = array_values(array_filter($match->modified, function (array $pair) use ($table, $match): bool {
+            if (($pair['by'] ?? null) === null) {
+                return true;
+            }
+
+            $rejected = PendingChange::query()
+                ->where('source_table_id', $table->id)
+                ->where('status', ChangeStatus::Rejected)
+                ->where('type', ChangeType::Modified)
+                ->where('source_record_id', $pair['record'])
+                ->where('fingerprint', $pair['row']->fingerprint)
+                ->exists();
+
+            if ($rejected) {
+                $match->removed[] = $pair['record'];
+                $match->new[] = $pair['row'];
+            }
+
+            return ! $rejected;
+        }));
     }
 
     /**
@@ -134,9 +164,9 @@ class ChangeSetBuilder
 
     /**
      * @param  list<int>  $trackedIds
-     * @return array{type: ChangeType, record: ?SourceRecord, old: ?array, new: ?array, changed: list<string>, fingerprint: ?string, identity: ?string, sheet_row: ?int}
+     * @return array{type: ChangeType, record: ?SourceRecord, old: ?array, new: ?array, changed: list<string>, fingerprint: ?string, identity: ?string, sheet_row: ?int, matched_by: ?string}
      */
-    private function describe(ChangeType $type, ?SourceRecord $record, ?SheetRow $row, array $trackedIds): array
+    private function describe(ChangeType $type, ?SourceRecord $record, ?SheetRow $row, array $trackedIds, ?string $matchedBy = null): array
     {
         $new = null;
 
@@ -168,6 +198,7 @@ class ChangeSetBuilder
             'fingerprint' => $row?->fingerprint,
             'identity' => $row?->identity ?? $record?->identity_value,
             'sheet_row' => $row?->sheetRow ?? $record?->sheet_row,
+            'matched_by' => $matchedBy,
         ];
     }
 
@@ -223,6 +254,7 @@ class ChangeSetBuilder
                 'fingerprint' => $change['fingerprint'],
                 'identity_value' => $change['identity'],
                 'sheet_row' => $change['sheet_row'],
+                'matched_by' => $change['matched_by'],
                 'status' => ChangeStatus::Pending,
             ]);
             $outcome->counts['pending_created']++;

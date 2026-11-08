@@ -8,6 +8,7 @@ use App\Filament\Resources\PendingChanges\Pages\ListPendingChanges;
 use App\Models\PendingChange;
 use App\Models\SourceTable;
 use App\Sync\ChangeApplier;
+use App\Sync\RecordMatcher;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -59,7 +60,11 @@ class PendingChangeResource extends Resource
             ->modifyQueryUsing(fn ($query) => $query->with('sourceTable.columns', 'sourceTable.tab.spreadsheet', 'decider'))
             ->defaultSort('id', 'desc')
             ->columns([
-                TextColumn::make('type')->badge(),
+                TextColumn::make('type')->badge()
+                    ->description(fn (PendingChange $record): ?string => $record->matched_by === RecordMatcher::BY_POSITION ? 'Matched by position' : null)
+                    ->tooltip(fn (PendingChange $record): ?string => $record->matched_by === RecordMatcher::BY_POSITION
+                        ? 'No key proves this is the same row: it sits in the same place, between the same unchanged rows. Approve if it is the same row; reject to treat it as removed + new.'
+                        : null),
                 TextColumn::make('sourceTable.name')->label('Table')
                     ->description(fn (PendingChange $record) => $record->sourceTable->tab->spreadsheet->name.' / '.$record->sourceTable->tab->name),
                 TextColumn::make('sheet_row')->label('Row')->numeric()->sortable(),

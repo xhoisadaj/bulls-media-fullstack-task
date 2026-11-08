@@ -25,11 +25,6 @@ class InMemorySheetsGateway implements SheetsGateway
      */
     private array $spreadsheets = [];
 
-    /** @var array<string, array<string, string>> */
-    public array $written = [];
-
-    public bool $writable = true;
-
     /** @var array<string, GoogleAccessException> */
     private array $failures = [];
 
@@ -123,45 +118,6 @@ class InMemorySheetsGateway implements SheetsGateway
         return $values?->formulas ?? [];
     }
 
-    public function writeCells(string $spreadsheetId, string $tabTitle, array $cells): void
-    {
-        if (! $this->writable) {
-            throw new GoogleAccessException('Writing to the sheet needs OAuth with write access.', GoogleAccessException::WRITE_NOT_ALLOWED);
-        }
-
-        $spreadsheet = $this->find($spreadsheetId);
-
-        foreach ($spreadsheet['tabs'] as $t => $tab) {
-            if ($tab['title'] !== $tabTitle) {
-                continue;
-            }
-
-            foreach ($cells as $cell => $value) {
-                [$row, $column] = $this->parseCell($cell);
-                $rows = $this->spreadsheets[$spreadsheetId]['tabs'][$t]['rows'];
-
-                for ($r = count($rows); $r <= $row; $r++) {
-                    $rows[$r] = [];
-                }
-
-                for ($c = count($rows[$row]); $c < $column; $c++) {
-                    $rows[$row][$c] = '';
-                }
-
-                $rows[$row][$column] = $value;
-                $this->spreadsheets[$spreadsheetId]['tabs'][$t]['rows'] = $rows;
-                $this->written[$spreadsheetId][$tabTitle.'!'.$cell] = $value;
-            }
-        }
-
-        $this->persist($spreadsheetId);
-    }
-
-    public function canWrite(): bool
-    {
-        return $this->writable;
-    }
-
     public function lastCredential(): ?CredentialType
     {
         return CredentialType::Demo;
@@ -212,36 +168,5 @@ class InMemorySheetsGateway implements SheetsGateway
         ksort($formulas);
 
         return new TabValues(array_values($raw), array_values($formatted), array_values($formulas));
-    }
-
-    /**
-     * @return array{0: int, 1: int} 0-based row and column
-     */
-    private function parseCell(string $cell): array
-    {
-        preg_match('/^([A-Z]+)(\d+)$/', $cell, $m);
-        $column = 0;
-
-        foreach (str_split($m[1]) as $letter) {
-            $column = $column * 26 + (ord($letter) - 64);
-        }
-
-        return [(int) $m[2] - 1, $column - 1];
-    }
-
-    private function persist(string $spreadsheetId): void
-    {
-        if ($this->directory === null) {
-            return;
-        }
-
-        $path = rtrim($this->directory, '/').'/'.$spreadsheetId.'.json';
-
-        if (File::exists($path)) {
-            File::put($path, json_encode(
-                ['id' => $spreadsheetId] + $this->spreadsheets[$spreadsheetId],
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-            ));
-        }
     }
 }

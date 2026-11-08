@@ -70,9 +70,61 @@ it('flags duplicate keys and never removes their record', function () {
     expect($result->flagged)->toHaveCount(2)->and($result->removed)->toBe([])->and($result->unchanged)->toBe([]);
 });
 
-it('flags empty keys in key mode but treats them as new in system ID mode', function () {
+it('flags empty keys in key mode', function () {
     $key = (new RecordMatcher)->match([row(30, 'belt')], [], IdentityMode::Key);
-    $system = (new RecordMatcher)->match([row(30, 'belt')], [], IdentityMode::SystemId);
 
-    expect($key->flagged[0]['reason'])->toBe('empty key')->and($system->new)->toHaveCount(1);
+    expect($key->flagged[0]['reason'])->toBe('empty key');
+});
+
+/**
+ * Stored rows A..D at sheet rows 2..5, as in system ID mode.
+ *
+ * @return list<StoredRecord>
+ */
+function storedAbcd(): array
+{
+    return [new StoredRecord(1, 'a', sheetRow: 2), new StoredRecord(2, 'b', sheetRow: 3), new StoredRecord(3, 'c', sheetRow: 4), new StoredRecord(4, 'd', sheetRow: 5)];
+}
+
+it('pairs a row edited in place in system ID mode', function () {
+    $result = (new RecordMatcher)->match([row(2, 'a'), row(3, 'b2'), row(4, 'c'), row(5, 'd')], storedAbcd(), IdentityMode::SystemId);
+
+    expect($result->modified)->toHaveCount(1)
+        ->and($result->modified[0]['record'])->toBe(2)
+        ->and($result->modified[0]['by'])->toBe(RecordMatcher::BY_POSITION)
+        ->and($result->new)->toBe([])->and($result->removed)->toBe([]);
+});
+
+it('pairs edits next to each other in order, and the first and last rows', function () {
+    $result = (new RecordMatcher)->match([row(2, 'a2'), row(3, 'b2'), row(4, 'c2'), row(5, 'd')], storedAbcd(), IdentityMode::SystemId);
+
+    expect(collect($result->modified)->mapWithKeys(fn ($p) => [$p['record'] => $p['row']->fingerprint])->all())
+        ->toBe([1 => 'a2', 2 => 'b2', 3 => 'c2']);
+});
+
+it('pairs across inserted rows elsewhere but not when the edited row moved', function () {
+    $inserted = (new RecordMatcher)->match([row(2, 'x'), row(3, 'a'), row(4, 'b'), row(5, 'c2'), row(6, 'd')], storedAbcd(), IdentityMode::SystemId);
+    $moved = (new RecordMatcher)->match([row(2, 'c2'), row(3, 'a'), row(4, 'b'), row(5, 'd')], storedAbcd(), IdentityMode::SystemId);
+
+    expect($inserted->modified[0]['record'])->toBe(3)->and($inserted->new)->toHaveCount(1)
+        ->and($moved->modified)->toBe([])->and($moved->removed)->toBe([3])->and($moved->new)->toHaveCount(1);
+});
+
+it('does not pair when a gap has a different number of removed and new rows', function () {
+    $result = (new RecordMatcher)->match([row(2, 'a'), row(3, 'b2'), row(4, 'd')], storedAbcd(), IdentityMode::SystemId);
+
+    expect($result->modified)->toBe([])->and($result->removed)->toBe([2, 3])->and($result->new)->toHaveCount(1);
+});
+
+it('never pairs in content mode', function () {
+    $result = (new RecordMatcher)->match([row(2, 'a'), row(3, 'b2'), row(4, 'c'), row(5, 'd')], storedAbcd(), IdentityMode::Content);
+
+    expect($result->modified)->toBe([])->and($result->removed)->toBe([2])->and($result->new)->toHaveCount(1);
+});
+
+it('keeps identical rows on their own IDs in sheet order', function () {
+    $records = [new StoredRecord(1, 'bag', sheetRow: 2), new StoredRecord(2, 'bag', sheetRow: 3), new StoredRecord(3, 'end', sheetRow: 4)];
+    $result = (new RecordMatcher)->match([row(2, 'bag'), row(3, 'bag2'), row(4, 'end')], $records, IdentityMode::SystemId);
+
+    expect($result->unchanged[0]['record'])->toBe(1)->and($result->modified[0]['record'])->toBe(2);
 });

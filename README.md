@@ -103,10 +103,10 @@ One queued job per spreadsheet, scheduled daily at 02:00 (`SYNC_DAILY_AT`) and a
 | Identity mode | How a row is recognised | Detects "modified"? |
 |---|---|---|
 | **Key columns** | one or more columns declared unique (`order_id`, `date + shop + product`), checked against the data | yes |
-| **System ID** | the app writes a `_sync_id` column into the sheet (needs OAuth with write access) | yes |
-| **Content** | the row's fingerprint | no: an edit shows as *removed + new*, side by side |
+| **System ID** (default) | an ID kept in our database only, nothing is written to the sheet. Rows are matched by content; an edited row is paired with its stored record when it stays **in the same place, between the same unchanged rows** | yes, when the row stays in place; always reviewed |
+| **Content** | the row's fingerprint only | no: an edit shows as *removed + new*, side by side |
 
-A row's position never counts. Sorting the sheet or moving a row changes nothing. A row that reappears after its removal was approved is reported as **restored**.
+Sorting the sheet or moving an unchanged row changes nothing. In system ID mode, a row that was edited **and** moved can't be proven to be the same row, so it shows as removed + new. Inserting or deleting other rows doesn't break the pairing, because it looks at the unchanged neighbours, not the row number. A position pairing is labelled "Matched by position" in the review inbox and is never auto-applied; rejecting it turns it into removed + new. A row that reappears after its removal was approved is reported as **restored**.
 
 ### Review and auto mode
 
@@ -226,7 +226,7 @@ docker compose exec app php artisan test
 
 95 Pest tests run against a separate MySQL test database:
 - **unit tests** for the services that don't touch the database or Google: normalizer, locator and detector, fingerprinter, matcher;
-- **feature tests** for the whole sync engine, using an in-memory Google gateway: every edge case above, schema safety, backfill, system IDs, the guards;
+- **feature tests** for the whole sync engine, using an in-memory Google gateway: every edge case above, schema safety, backfill, system ID position pairing, the guards;
 - **UI tests** that render every admin screen and exercise the main actions (approve, create a mapping, save an encrypted API key with password confirmation, reject a forged OAuth callback).
 
 ## Project structure
@@ -235,7 +235,7 @@ docker compose exec app php artisan test
 app/Google/            SheetsGateway (real Google + in-memory), credentials (OAuth → API key fallback), importer
 app/Sync/              the engine: TableLocator, StructureInspector, ValueNormalizer, Fingerprinter,
                        RecordMatcher, SheetReader, ChangeSetBuilder, ChangeApplier, TargetWriter,
-                       SchemaManager, Backfiller, SystemIdWriter, SyncRunner
+                       SchemaManager, Backfiller, SyncRunner
 app/Filament/          admin panel (resources, Google connection page, dashboard widget)
 app/Http/Controllers/  GoogleOAuthController (consent redirect + callback)
 database/demo/         demo spreadsheets (JSON)

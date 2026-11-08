@@ -298,61 +298,73 @@ it('writes one sheet row to two tables linked by _record_id', function () {
     expect((array) $joined)->toBe(['first_name' => 'Xhoi', 'city' => 'Tirana', 'phone' => '0692']);
 });
 
-it('assigns system IDs and detects modifications without a natural key', function () {
+function systemIdFixture(): SyncFixture
+{
     $fixture = SyncFixture::make(
-        [['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Ana', 'Durres', 35]],
+        [['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Ana', 'Durres', 35], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 50]],
         ['name' => ColumnType::String, 'city' => ColumnType::String, 'amount' => ColumnType::Integer],
         ['name' => 'name', 'city' => 'city', 'amount' => 'amount'],
         target: 'people',
         mode: IdentityMode::SystemId,
     );
-
-    syncNow($fixture);
-    $ids = $fixture->gateway->written['sheet-1'];
-
-    expect($ids)->toHaveKey('Sales!D1')->and($ids['Sales!D1'])->toBe('_sync_id')->and(DB::table('people')->count())->toBe(2);
-
-    $tab = $fixture->gateway->readTabs('sheet-1', ['Sales'])['Sales'];
-    $anaId = $tab->formattedAt(2, 3);
-    $fixture->sheet([['name', 'city', 'amount', '_sync_id'], ['Ana', 'Durres', 40, $anaId], ['Xhoi', 'Tirana', 20, $tab->formattedAt(1, 3)]]);
-
-    $run = syncNow($fixture);
-
-    expect($run->counts)->toMatchArray(['modified' => 1, 'unchanged' => 1, 'new' => 0, 'removed' => 0])
-        ->and(DB::table('people')->where('name', 'Ana')->value('amount'))->toBe(40);
-});
-
-it('holds new rows in system ID mode when the sheet cannot be written', function () {
-    $fixture = SyncFixture::make(
-        [['name', 'amount', '_sync_id'], ['Xhoi', 20, 'abc'], ['Ana', 35, '']],
-        ['name' => ColumnType::String, 'amount' => ColumnType::Integer, '_sync_id' => ColumnType::String],
-        ['name' => 'name', 'amount' => 'amount'],
-        target: 'people',
-        mode: IdentityMode::SystemId,
-    );
-    $fixture->gateway->writable = false;
-
     syncNow($fixture);
 
-    expect(DB::table('people')->pluck('name')->all())->toBe(['Xhoi'])
-        ->and(StructureAlert::query()->where('type', AlertType::SystemIdProblem)->value('message'))->toContain('waiting for write access');
+    return $fixture;
+}
+
+it('keeps system IDs on our side and pairs a row edited in place, without writing to the sheet', function () {
+    $fixture = systemIdFixture();
+    $anaId = DB::table('people')->where('name', 'Ana')->value('_record_id');
+
+    expect(DB::table('people')->count())->toBe(4);
+
+    $fixture->sheet([['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Ana', 'Durres', 40], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 50]]);
+    $run = syncNow($fixture);
+    $change = PendingChange::query()->pending()->sole();
+
+    expect($run->counts)->toMatchArray(['modified' => 1, 'new' => 0, 'removed' => 0, 'auto_applied' => 0])
+        ->and($change->source_record_id)->toBe($anaId)
+        ->and($change->matched_by)->toBe('position')
+        ->and(DB::table('people')->where('name', 'Ana')->value('amount'))->toBe(35);
+
+    app(ChangeApplier::class)->approve($change, User::factory()->create());
+
+    expect(DB::table('people')->where('_record_id', $anaId)->value('amount'))->toBe(40)
+        ->and(DB::table('people')->count())->toBe(4)
+        ->and($fixture->gateway->readTabs('sheet-1', ['Sales'])['Sales']->formatted[0])->toBe(['name', 'city', 'amount']);
 });
 
-it('fails a system ID table visibly when the sheet has no _sync_id column and cannot be written', function () {
-    $fixture = SyncFixture::make(
-        [['name', 'amount'], ['Xhoi', 20], ['Ana', 35]],
-        ['name' => ColumnType::String, 'amount' => ColumnType::Integer],
-        ['name' => 'name', 'amount' => 'amount'],
-        target: 'people',
-        mode: IdentityMode::SystemId,
-    );
-    $fixture->gateway->writable = false;
+it('still pairs an edited row when a row above it is deleted', function () {
+    $fixture = systemIdFixture();
 
+    $fixture->sheet([['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 99]]);
     $run = syncNow($fixture);
 
-    expect($run->status)->toBe(SyncStatus::Failed)
-        ->and(collect($run->errors)->pluck('message')->implode(' '))->toContain('needs a _sync_id column')
-        ->and(DB::table('people')->count())->toBe(0);
+    expect($run->counts)->toMatchArray(['modified' => 1, 'removed' => 1, 'new' => 0])
+        ->and(PendingChange::query()->where('type', 'modified')->sole()->source_record_id)
+        ->toBe(DB::table('people')->where('name', 'Mira')->value('_record_id'));
+});
+
+it('does not pair a row that was edited and moved', function () {
+    $fixture = systemIdFixture();
+
+    $fixture->sheet([['name', 'city', 'amount'], ['Ana', 'Durres', 40], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 50], ['Xhoi', 'Tirana', 20]]);
+    $run = syncNow($fixture);
+
+    expect($run->counts)->toMatchArray(['modified' => 0, 'removed' => 1, 'new' => 1]);
+});
+
+it('treats a rejected position pairing as removed plus new on the next sync', function () {
+    $fixture = systemIdFixture();
+    $fixture->sheet([['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Lea', 'Fier', 70], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 50]]);
+    syncNow($fixture);
+
+    app(ChangeApplier::class)->reject(PendingChange::query()->pending()->sole(), User::factory()->create());
+    $run = syncNow($fixture);
+
+    expect($run->counts)->toMatchArray(['modified' => 0, 'removed' => 1, 'new' => 1, 'auto_applied' => 1])
+        ->and(DB::table('people')->where('name', 'Lea')->exists())->toBeTrue()
+        ->and(PendingChange::query()->pending()->sole()->type->value)->toBe('removed');
 });
 
 it('fails one file cleanly without touching data when it becomes inaccessible', function () {

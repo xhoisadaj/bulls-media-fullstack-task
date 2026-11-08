@@ -31,12 +31,7 @@ class GoogleOAuthController extends Controller
         $state = Str::random(40);
         $request->session()->put('google_oauth_state', $state);
 
-        $scopes = ['openid', 'email', GoogleCredentialProvider::SCOPE_DRIVE_LIST];
-        $scopes[] = $request->boolean('write')
-            ? GoogleCredentialProvider::SCOPE_SHEETS_WRITE
-            : GoogleCredentialProvider::SCOPE_SHEETS_READ;
-
-        $client->setScopes($scopes);
+        $client->setScopes(['openid', 'email', GoogleCredentialProvider::SCOPE_DRIVE_LIST, GoogleCredentialProvider::SCOPE_SHEETS_READ]);
         $client->setState($state);
 
         return redirect()->away($client->createAuthUrl());

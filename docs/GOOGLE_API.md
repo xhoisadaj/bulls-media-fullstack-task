@@ -6,10 +6,11 @@ Sheets Sync connects to Google with your **own** credentials. There are two opti
 |---|---|---|
 | Reads | **private** sheets your Google account can open | only sheets shared as **"Anyone with the link can view"** |
 | Lists your spreadsheets ("Fetch from Google") | yes | no (add sheets by URL) |
-| Writes (system ID mode) | yes, if you connect with write access | no |
 | Time to set up | about 10 minutes | about 2 minutes |
 
 With both set, OAuth is used first. The API key is used automatically when OAuth isn't connected, has expired, or can't open a file. The sync history shows which credential was used, and an alert tells you when the fallback is in use.
+
+**Read-only.** The app never writes to your sheets, so it only asks Google for read access.
 
 **Why can't an API key read private sheets?** An API key identifies a Google Cloud *project*, not a person. To open a private sheet, Google needs to know *who* is asking, and OAuth provides that. With OAuth, the app acts as your account, so **no sheet has to be shared with any email**.
 
@@ -40,7 +41,6 @@ With both set, OAuth is used first. The API key is used automatically when OAuth
    - `https://www.googleapis.com/auth/spreadsheets.readonly`: read sheets
    - `https://www.googleapis.com/auth/drive.metadata.readonly`: list your spreadsheets
    - `openid`, `email`: show which account is connected
-   - `https://www.googleapis.com/auth/spreadsheets`: only when you click **Connect with write access** (system ID mode)
 
 ### A2. OAuth client ID
 
@@ -57,7 +57,6 @@ With both set, OAuth is used first. The API key is used automatically when OAuth
 
 1. In the admin panel: **Settings → Google connection → Set OAuth client**. Paste the downloaded JSON (the app reads the ID and secret, and warns if the redirect URI isn't registered on the client), or fill in the client ID and secret. Confirm with your password.
 2. Click **Connect Google account**, choose a test user, and click **Allow**. You're sent back to the settings page with the status **Connected**.
-3. Use **Connect with write access** instead only if you want **system ID mode** (the app writes a `_sync_id` column into sheets without a natural ID).
 
 From the terminal instead: `php artisan google:configure --client-json=/path/to/client.json`, then connect in the panel. The consent step needs a browser.
 

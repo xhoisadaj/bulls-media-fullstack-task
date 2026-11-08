@@ -17,7 +17,6 @@ enum AlertType: string implements HasColor, HasLabel
     case MassRemoval = 'mass_removal';
     case FileNotAccessible = 'file_not_accessible';
     case FallbackInUse = 'fallback_in_use';
-    case SystemIdProblem = 'system_id_problem';
 
     public function getLabel(): string
     {
@@ -32,7 +31,6 @@ enum AlertType: string implements HasColor, HasLabel
             self::MassRemoval => 'Mass removal blocked',
             self::FileNotAccessible => 'File not accessible',
             self::FallbackInUse => 'API key fallback in use',
-            self::SystemIdProblem => 'System ID problem',
         };
     }
 

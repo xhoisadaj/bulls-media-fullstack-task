@@ -15,8 +15,6 @@ use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Exception as GoogleServiceException;
 use Google\Service\Sheets;
-use Google\Service\Sheets\BatchUpdateValuesRequest;
-use Google\Service\Sheets\ValueRange;
 use Throwable;
 
 /**
@@ -123,35 +121,6 @@ class GoogleSheetsGateway implements SheetsGateway
                 'valueRenderOption' => 'FORMULA',
             ])->getValues() ?? [];
         });
-    }
-
-    public function writeCells(string $spreadsheetId, string $tabTitle, array $cells): void
-    {
-        if ($cells === []) {
-            return;
-        }
-
-        if (! $this->canWrite()) {
-            throw new GoogleAccessException('Writing to the sheet needs OAuth with write access.', GoogleAccessException::WRITE_NOT_ALLOWED);
-        }
-
-        $this->withCredential(CredentialType::OAuth, function (Client $client) use ($spreadsheetId, $tabTitle, $cells): void {
-            $data = [];
-
-            foreach ($cells as $cell => $value) {
-                $data[] = new ValueRange(['range' => A1::tab($tabTitle).'!'.$cell, 'values' => [[$value]]]);
-            }
-
-            (new Sheets($client))->spreadsheets_values->batchUpdate($spreadsheetId, new BatchUpdateValuesRequest([
-                'valueInputOption' => 'RAW',
-                'data' => $data,
-            ]));
-        });
-    }
-
-    public function canWrite(): bool
-    {
-        return $this->credentials->hasWriteScope();
     }
 
     public function lastCredential(): ?CredentialType

@@ -114,7 +114,6 @@ class MappingForm
 
         return SourceColumn::query()
             ->where('source_table_id', $sourceTableId)
-            ->where('header', '!=', '_sync_id')
             ->orderBy('position')
             ->get()
             ->mapWithKeys(fn (SourceColumn $c) => [$c->id => $c->header.($c->is_present ? '' : ' (missing from sheet)')])

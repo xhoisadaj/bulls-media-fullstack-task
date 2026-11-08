@@ -10,7 +10,12 @@ final class MatchResult
     /** @var list<array{record: int, row: SheetRow}> */
     public array $unchanged = [];
 
-    /** @var list<array{record: int, row: SheetRow}> */
+    /**
+     * Rows recognised by key, or (system ID mode) paired by position: same place between
+     * the same unchanged neighbours. Position pairs carry by = 'position'.
+     *
+     * @var list<array{record: int, row: SheetRow, by?: string}>
+     */
     public array $modified = [];
 
     /** @var list<array{record: int, row: SheetRow}> */

@@ -1,7 +1,7 @@
 @php
     /** @var \App\Models\PendingChange $record */
     $record = $getRecord();
-    $headers = $record->sourceTable->columns->where('header', '!=', '_sync_id')->pluck('header', 'id');
+    $headers = $record->sourceTable->columns->pluck('header', 'id');
     $show = fn ($value) => $value === null || $value === '' ? '∅' : \Illuminate\Support\Str::limit((string) $value, 60);
     $type = $record->type->value;
 @endphp
