@@ -83,7 +83,7 @@ class DemoCommand extends Command
         }
 
         $this->newLine();
-        $this->components->info('Demo loaded. Open the admin panel: London is applied automatically, Paris and Online wait in the review inbox.');
+        $this->components->info('Demo loaded. The first sync of every table is imported right away; from now on, changes in review-mode tables (Paris, Online) wait in the review inbox.');
         $this->components->bulletList([
             'Simulate sheet edits with: php artisan sheets:demo-change {edit|sort|delete|restore|add-column|rename-column|clear|reset}',
             'Then click "Sync now" (or run php artisan sheets:sync --now) and look at the review inbox and alerts.',

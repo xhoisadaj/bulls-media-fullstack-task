@@ -53,7 +53,7 @@ Numbers and dates are read as raw values (Google serial numbers become ISO dates
 ## 6. Review by default, auto as an option; removals always reviewed
 
 The task asks for daily automatic saving, and I also wanted nothing risky to happen silently. Each source table has an apply mode:
-- **Review** (default): every change waits for approval.
+- **Review** (default): every change waits for approval. The **first import** of a table is the exception: there is nothing to compare with yet, so all its rows are saved right away; review starts with the next sync.
 - **Auto:** new, modified and restored rows are applied automatically.
 
 **Removals always wait for a human**, in both modes. Removals are soft deletes. A **mass-removal guard** stops a table when more than half of its rows (and at least 3) would be removed, which catches a cleared sheet or the wrong table being found. Rejected changes are remembered so they aren't raised every day, and a pending change is **superseded** when the row changes again before review.

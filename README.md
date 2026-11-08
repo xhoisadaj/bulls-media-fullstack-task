@@ -112,6 +112,7 @@ Sorting the sheet or moving an unchanged row changes nothing. In system ID mode,
 
 | Change | Review mode (default) | Auto mode |
 |---|---|---|
+| First sync of a table (every row is new) | **imported right away** | imported right away |
 | New, modified, restored | waits for approval | applied |
 | Removed | waits for approval | **waits for approval** |
 | New or missing column | alert, admin decides | alert, admin decides |
@@ -150,7 +151,7 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 2. **Sources → Spreadsheets:** **Fetch from Google** (OAuth) or **Add by URL**. Then open a spreadsheet and enable its tabs.
 3. **Set up a table:** the wizard detects the tables in the tab, suggests column types from the data, and warns about volatile formulas and formula errors. Choose the identity mode (the key is checked for uniqueness) and Review or Auto.
 4. **Mappings:** choose an existing target table or create one, then pick the columns and their database names. Database column names are free text, and each column has a **Type** that is preselected from the sheet column (the recommendation) but can be changed; values are converted, and ones that don't convert are saved empty (the original stays in the source record). With an existing table (e.g. a second file into `sales`), the table's columns are suggested as you type, and picking one takes its type, **Map matching columns** pairs same-named columns in one click, a type that doesn't fit is flagged on the row, and an overview shows which columns this file fills and which stay empty for its rows. The plan is validated before any `ALTER TABLE`. **Preview** shows what will be written.
-5. **Sync now**, or wait for the daily run. **Review → Review inbox** shows changes with field diffs, which you approve or reject. **Review → Alerts** shows new or missing columns (with "Map this column"), moved headers, blocked mass removals, access problems and fallback use.
+5. **Sync now**, or wait for the daily run. The **first sync of a table imports all its rows right away** (there is nothing to compare with yet); from the next sync on, **Review → Review inbox** shows changes with field diffs, which you approve or reject. **Review → Alerts** shows new or missing columns (with "Map this column"), moved headers, blocked mass removals, access problems and fallback use.
 6. **Activity:** sync history (counts, skipped rows, the credential used), target tables with a data browser (filter by the file rows came from), schema history, and removal of empty columns and tables.
 
 ## Demo scenarios
@@ -163,7 +164,7 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 | **Shop Paris** | headers at **H99**, columns in another order, an extra `region` column, review mode |
 | **Online Orders** | no ID column (content mode); **one tab → two tables** (`sales` + `customers`); a `#DIV/0!` row and a `TOTAL` row that get skipped; a second **Returns** table stacked below |
 
-London, Paris and Online all write into the same `sales` table, which shows many files → one table.
+London, Paris and Online all write into the same `sales` table, which shows many files → one table. The first sync imports every table right away, so the review inbox starts empty: simulate edits to fill it.
 
 To simulate edits, then sync and watch the review inbox and alerts:
 

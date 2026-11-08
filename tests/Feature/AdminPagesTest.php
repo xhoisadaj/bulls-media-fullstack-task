@@ -15,6 +15,7 @@ use App\Filament\Resources\Spreadsheets\Pages\EditSpreadsheet;
 use App\Filament\Resources\Spreadsheets\Pages\ListSpreadsheets;
 use App\Filament\Resources\StructureAlerts\Pages\ListStructureAlerts;
 use App\Filament\Resources\SyncRuns\Pages\ListSyncRuns;
+use App\Google\Contracts\SheetsGateway;
 use App\Models\CredentialAudit;
 use App\Models\GoogleSetting;
 use App\Models\ManagedTable;
@@ -62,14 +63,21 @@ it('renders every admin screen with the demo data', function (string $page, ?Clo
     'google connection' => [GoogleConnection::class],
 ]);
 
-it('approves pending changes from the review inbox', function () {
-    $pending = PendingChange::query()->pending()->count();
-    expect($pending)->toBeGreaterThan(0);
+it('imports the demo right away and approves later changes from the review inbox', function () {
+    expect(PendingChange::query()->pending()->count())->toBe(0)
+        ->and(DB::table('sales')->whereNull('_removed_at')->count())->toBe(6 + 4 + 3);
+
+    Artisan::call('sheets:demo-change', ['scenario' => 'delete']);
+    app()->forgetScopedInstances();
+    app()->forgetInstance(SheetsGateway::class);
+    Artisan::call('sheets:sync', ['--now' => true]);
+
+    expect(PendingChange::query()->pending()->count())->toBe(1);
 
     Livewire::test(ListPendingChanges::class)->callAction('approveAll');
 
     expect(PendingChange::query()->pending()->count())->toBe(0)
-        ->and(DB::table('sales')->whereNull('_removed_at')->count())->toBe(6 + 4 + 3);
+        ->and(DB::table('sales')->whereNull('_removed_at')->count())->toBe(6 + 4 + 3 - 1);
 });
 
 it('creates a mapping into a new table and backfills it', function () {

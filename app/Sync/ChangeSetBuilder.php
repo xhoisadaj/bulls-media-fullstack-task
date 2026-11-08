@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Turns match facts into decisions: mass-removal guard, rejection memory, superseding
- * outdated pending changes, and review vs auto. RecordMatcher answers "what's different?",
+ * outdated pending changes, the first import, and review vs auto. RecordMatcher answers "what's different?",
  * this answers "what do we do about it?".
  */
 class ChangeSetBuilder
@@ -85,12 +85,18 @@ class ChangeSetBuilder
 
         $live = $this->reconcile($table, $run, $desired, $outcome);
 
-        if ($table->apply_mode === ApplyMode::Auto) {
-            foreach ($live as $change) {
+        // The first import of a table has nothing to compare with, so its rows are saved right away,
+        // in review mode too. Review starts with the next sync, when there is something that changed.
+        $firstImport = $records->isEmpty();
+
+        foreach ($live as $change) {
+            $apply = $firstImport
+                ? $change->type === ChangeType::New
                 // A position pairing is a strong hint, not proof: it always waits for a human.
-                if ($change->type->canAutoApply() && $change->matched_by === null && $this->applier->approve($change, null)) {
-                    $outcome->counts['auto_applied']++;
-                }
+                : $table->apply_mode === ApplyMode::Auto && $change->type->canAutoApply() && $change->matched_by === null;
+
+            if ($apply && $this->applier->approve($change, null)) {
+                $outcome->counts['auto_applied']++;
             }
         }
 

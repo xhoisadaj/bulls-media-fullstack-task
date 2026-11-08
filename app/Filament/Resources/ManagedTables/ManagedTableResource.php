@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\ManagedTables;
 
+use App\Enums\ColumnType;
 use App\Filament\Resources\ManagedTables\Pages\BrowseManagedTable;
 use App\Filament\Resources\ManagedTables\Pages\ListManagedTables;
+use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Models\ManagedTable;
 use App\Sync\SchemaException;
 use App\Sync\SchemaManager;
@@ -12,6 +14,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -69,6 +72,7 @@ class ManagedTableResource extends Resource
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
                 ActionGroup::make([
+                    self::addColumnAction(),
                     self::removeColumnsAction(),
                     self::deleteTableAction(),
                 ]),
@@ -86,6 +90,34 @@ class ManagedTableResource extends Resource
             ])
             ->emptyStateHeading('No target tables yet')
             ->emptyStateDescription('Target tables are created when you save a mapping.');
+    }
+
+    /**
+     * Adds an empty column with any name and type, e.g. one that a second file will fill later.
+     */
+    private static function addColumnAction(): Action
+    {
+        return Action::make('addColumn')
+            ->label('Add column')
+            ->icon(Heroicon::OutlinedPlusCircle)
+            ->visible(fn (ManagedTable $record): bool => Schema::hasTable($record->name))
+            ->modalHeading(fn (ManagedTable $record): string => 'Add a column to '.$record->name)
+            ->modalDescription('The column starts empty. Map a sheet column to it later to fill it.')
+            ->schema([
+                TextInput::make('name')->label('Column name')->required()->placeholder('e.g. discount'),
+                Select::make('type')->options(ColumnType::class)->default(ColumnType::String)->required(),
+            ])
+            ->action(function (ManagedTable $record, array $data): void {
+                try {
+                    app(SchemaManager::class)->addEmptyColumn($record, trim($data['name']), ColumnType::from(SourceTableForm::enumValue($data['type'])), auth()->user());
+                } catch (SchemaException $e) {
+                    Notification::make()->title('The column was not added')->body(implode(' ', $e->errors))->danger()->send();
+
+                    return;
+                }
+
+                Notification::make()->title('Added '.$record->name.'.'.trim($data['name']))->success()->send();
+            });
     }
 
     /**

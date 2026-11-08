@@ -223,6 +223,28 @@ class SchemaManager
     }
 
     /**
+     * Adds an empty column chosen by the admin (no sheet column fills it yet).
+     *
+     * @throws SchemaException
+     */
+    public function addEmptyColumn(ManagedTable $table, string $column, ColumnType $type, ?User $user = null): void
+    {
+        $errors = array_filter([
+            Schema::hasTable($table->name) ? null : 'Table '.$table->name.' doesn\'t exist yet.',
+            $this->nameError($column, 'Column'),
+            in_array($column, self::SYSTEM_COLUMNS, true) ? 'Column "'.$column.'" is reserved for the sync system.' : null,
+            Schema::hasTable($table->name) && Schema::hasColumn($table->name, $column) ? 'Column "'.$column.'" already exists in '.$table->name.'.' : null,
+        ]);
+
+        if ($errors !== []) {
+            throw new SchemaException(array_values($errors));
+        }
+
+        Schema::table($table->name, fn (Blueprint $blueprint) => $this->addColumn($blueprint, $column, $type));
+        $this->log($table->id, 'add_column', $column, $type->value, $user);
+    }
+
+    /**
      * Drops empty, unmapped columns. All or nothing: any problem and nothing is dropped.
      *
      * @param  list<string>  $columns

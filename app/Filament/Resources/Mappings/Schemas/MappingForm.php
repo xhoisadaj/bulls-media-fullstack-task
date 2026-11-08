@@ -11,6 +11,7 @@ use App\Sync\SchemaManager;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -35,6 +36,7 @@ class MappingForm
     {
         return $schema->components([
             Section::make('From → to')
+                ->columnSpanFull()
                 ->columns(2)
                 ->schema([
                     Select::make('source_table_id')
@@ -74,7 +76,8 @@ class MappingForm
                 ]),
 
             Section::make('Columns')
-                ->description('Pick the sheet columns to save and the database column for each. Removing a column here only stops syncing it; the database column and its data stay.')
+                ->columnSpanFull()
+                ->description('Each row saves one sheet column into a database column: type any name and pick the type (the recommended one is preselected). Removing a row only stops syncing it; the database column and its data stay. To add an empty column that no sheet column fills, use Target tables → Add column.')
                 ->schema([
                     Text::make(fn (Get $get): ?HtmlString => self::overview(self::targetTable($get), $get('source_table_id'), $get('columns') ?? []))
                         ->visible(fn (Get $get): bool => self::targetTable($get) !== null),
@@ -96,12 +99,18 @@ class MappingForm
                     Repeater::make('columns')
                         ->relationship()
                         ->hiddenLabel()
-                        ->columns(12)
+                        ->table([
+                            TableColumn::make('Sheet column')->markAsRequired(),
+                            TableColumn::make('Database column')->markAsRequired(),
+                            TableColumn::make('Type')->markAsRequired(),
+                            TableColumn::make('Notes'),
+                        ])
                         ->defaultItems(0)
-                        ->addActionLabel('Add column')
+                        ->addActionLabel('Map a sheet column')
                         ->schema([
                             Select::make('source_column_id')
                                 ->label('Sheet column')
+                                ->hiddenLabel()
                                 ->options(fn (Get $get) => self::columnOptions($get('../../source_table_id')))
                                 ->required()
                                 ->distinct()
@@ -119,13 +128,12 @@ class MappingForm
                                     }
 
                                     $set('target_type', self::recommendedType(self::targetTable($get, '../../'), $get('target_column'), $column)?->value);
-                                })
-                                ->columnSpan(3),
+                                }),
                             TextInput::make('target_column')
                                 ->label('Database column')
+                                ->hiddenLabel()
                                 ->placeholder('any name, e.g. product_name')
                                 ->datalist(fn (Get $get): array => array_keys(self::existingColumns(self::targetTable($get, '../../'))))
-                                ->helperText(fn (Get $get): ?string => self::targetTable($get, '../../') === null ? null : 'Type any name; the table\'s columns are suggested.')
                                 ->required()
                                 ->distinct()
                                 ->live(onBlur: true)
@@ -140,10 +148,10 @@ class MappingForm
                                     if ($error = app(SchemaManager::class)->nameError((string) $value, 'Column')) {
                                         $fail($error);
                                     }
-                                })
-                                ->columnSpan(3),
+                                }),
                             Select::make('target_type')
                                 ->label('Type')
+                                ->hiddenLabel()
                                 ->options(ColumnType::class)
                                 ->required()
                                 ->live()
@@ -153,11 +161,8 @@ class MappingForm
                                     }
                                 })
                                 ->disabled(fn (Get $get): bool => self::existingType(self::targetTable($get, '../../'), $get('target_column')) !== null)
-                                ->dehydrated()
-                                ->helperText(fn (Get $get): ?string => self::typeHint(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column')))
-                                ->columnSpan(3),
-                            Text::make(fn (Get $get): HtmlString => self::typeNote(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column'), $get('target_type')))
-                                ->columnSpan(3),
+                                ->dehydrated(),
+                            Text::make(fn (Get $get): HtmlString => self::typeNote(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column'), $get('target_type'))),
                         ]),
                 ]),
         ]);
@@ -223,7 +228,7 @@ class MappingForm
             return new HtmlString('');
         }
 
-        $notes = [];
+        $notes = ['<span class="ss-muted">'.e((string) self::typeHint($table, $sourceColumnId, $target)).'</span>'];
 
         if ($table !== null && self::existingType($table, $target) === null) {
             $notes[] = '<span class="ss-muted">New column, added to '.e($table).'.</span>';
@@ -233,7 +238,7 @@ class MappingForm
             $notes[] = '<span class="ss-error">⚠ The sheet column is '.e($sheetType->getLabel()).'. Values are converted to '.e($type->getLabel()).'; values that don\'t convert are saved empty.</span>';
         }
 
-        return new HtmlString('<div class="ss" style="padding-top:2rem">'.implode('<br>', $notes).'</div>');
+        return new HtmlString('<div class="ss">'.implode('<br>', $notes).'</div>');
     }
 
     /**

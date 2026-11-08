@@ -101,17 +101,25 @@ it('shows an edit as removed + new in content mode, and keeps removals pending e
         ->and(DB::table('people')->whereNull('_removed_at')->count())->toBe(3);
 });
 
-it('queues everything in review mode and applies on approval', function () {
+it('imports the first sync right away in review mode, then queues changes until approved', function () {
     $fixture = keyFixture([[1001, 'Shoes', 50, 2]], ApplyMode::Review);
 
+    $first = syncNow($fixture);
+
+    expect($first->counts)->toMatchArray(['new' => 1, 'auto_applied' => 1])
+        ->and(DB::table('sales')->value('name'))->toBe('Shoes')
+        ->and(PendingChange::query()->pending()->count())->toBe(0);
+
+    $fixture->sheet(orders([[1001, 'Shoes', 60, 2], [1002, 'Bag', 35, 1]]));
     syncNow($fixture);
-    $change = PendingChange::query()->sole();
 
-    expect($change->status)->toBe(ChangeStatus::Pending)->and(DB::table('sales')->count())->toBe(0);
+    expect(PendingChange::query()->pending()->count())->toBe(2)
+        ->and(DB::table('sales')->count())->toBe(1)
+        ->and(DB::table('sales')->value('product_price'))->toBe('50.000000');
 
-    app(ChangeApplier::class)->approve($change, User::factory()->create());
+    app(ChangeApplier::class)->approve(PendingChange::query()->pending()->where('type', 'new')->sole(), User::factory()->create());
 
-    expect(DB::table('sales')->value('name'))->toBe('Shoes');
+    expect(DB::table('sales')->count())->toBe(2);
 });
 
 it('does not raise a rejected change again until the row changes again', function () {

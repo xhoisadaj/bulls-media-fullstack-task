@@ -113,3 +113,16 @@ it('deletes several empty tables at once and skips tables with rows', function (
     expect(Schema::hasTable('tmp_empty_a'))->toBeFalse()->and(Schema::hasTable('tmp_empty_b'))->toBeFalse()
         ->and(Schema::hasTable('tmp_full'))->toBeTrue();
 });
+
+it('adds an empty column with any name and type, and rejects reserved or existing names', function () {
+    $table = targetTable('tmp_orders', ['note']);
+
+    Livewire::test(ListManagedTables::class)
+        ->callTableAction('addColumn', $table, ['name' => 'discount', 'type' => 'decimal'])
+        ->assertNotified('Added tmp_orders.discount');
+
+    expect(collect(Schema::getColumns('tmp_orders'))->firstWhere('name', 'discount')['type_name'])->toBe('decimal')
+        ->and($table->history()->where('action', 'add_column')->value('column_name'))->toBe('discount')
+        ->and(fn () => app(SchemaManager::class)->addEmptyColumn($table, 'note', ColumnType::String))->toThrow(SchemaException::class)
+        ->and(fn () => app(SchemaManager::class)->addEmptyColumn($table, '_record_id', ColumnType::String))->toThrow(SchemaException::class);
+});
