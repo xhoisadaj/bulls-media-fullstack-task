@@ -29,4 +29,23 @@
     .ss-chip { border-radius: 0.375rem; padding: 0.15rem 0.5rem; background: rgb(243 244 246); font-variant-numeric: tabular-nums; }
     .dark .ss-chip { background: rgb(255 255 255 / 0.08); }
     .ss-cell { padding: 0.5rem 0.75rem; }
+
+    /* Spreadsheet-like tab preview in the table setup wizard */
+    .ss-grid-wrap { max-height: 26rem; overflow: auto; position: relative; }
+    .ss-grid { border-collapse: separate; border-spacing: 0; font-size: 0.8125rem; }
+    .ss-grid th { position: sticky; z-index: 1; padding: 0.2rem 0.5rem; font-weight: 500; font-size: 0.6875rem; color: rgb(107 114 128); background: rgb(243 244 246); border-right: 1px solid rgb(229 231 235); border-bottom: 1px solid rgb(229 231 235); text-align: center; white-space: nowrap; }
+    .ss-grid thead th { top: 0; z-index: 2; }
+    .ss-grid tbody th { left: 0; min-width: 2.75rem; }
+    .ss-grid thead th.ss-grid-corner { left: 0; z-index: 3; }
+    .ss-grid td { padding: 0.2rem 0.5rem; min-width: 5rem; max-width: 14rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid rgb(229 231 235); border-bottom: 1px solid rgb(229 231 235); cursor: pointer; }
+    .ss-grid td:hover { outline: 2px solid rgb(16 185 129 / 0.6); outline-offset: -2px; }
+    .ss-grid td.ss-grid-start { box-shadow: inset 3px 0 0 rgb(16 185 129 / 0.5); }
+    .ss-grid td.ss-grid-in { background: rgb(209 250 229 / 0.7); }
+    .ss-grid td.ss-grid-header { background: rgb(167 243 208); font-weight: 600; }
+    .ss-grid td.ss-grid-head { outline: 2px solid rgb(5 150 105); outline-offset: -2px; }
+    .dark .ss-grid th { color: rgb(156 163 175); background: rgb(39 39 42); border-color: rgb(255 255 255 / 0.08); }
+    .dark .ss-grid td { border-color: rgb(255 255 255 / 0.08); }
+    .dark .ss-grid td.ss-grid-in { background: rgb(16 185 129 / 0.12); }
+    .dark .ss-grid td.ss-grid-header { background: rgb(16 185 129 / 0.3); }
+    .dark .ss-grid td.ss-grid-head { outline-color: rgb(52 211 153); }
 </style>

@@ -25,6 +25,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Components\Wizard\Step;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -82,8 +83,11 @@ class CreateSourceTable extends CreateRecord
                                 ->label('Header row starts at cell')
                                 ->placeholder('H99')
                                 ->regex('/^[A-Za-z]{1,3}[1-9]\d*$/')
-                                ->required(fn (Get $get) => $get('detected') === 'manual'),
+                                ->required(fn (Get $get) => $get('detected') === 'manual')
+                                ->live(onBlur: true),
                         ]),
+                    View::make('filament.tab-preview')
+                        ->viewData(fn (Get $get): array => $this->tabPreview($get('tab_id'), $get('detected'), $get('manual_cell'))),
                 ])
                 ->afterValidation(function (Get $get, Set $set) {
                     [$row, $column] = $this->chosenPosition($get('detected'), $get('manual_cell'));
@@ -254,6 +258,28 @@ class CreateSourceTable extends CreateRecord
         }
 
         return $descriptions;
+    }
+
+    /**
+     * Data for the spreadsheet preview under the table choices.
+     *
+     * @return array{preview: ?array<string, mixed>, error: ?string}
+     */
+    private function tabPreview(mixed $tabId, ?string $detected, ?string $manualCell): array
+    {
+        $tab = $tabId ? Tab::query()->find($tabId) : null;
+
+        if ($tab === null) {
+            return ['preview' => null, 'error' => null];
+        }
+
+        $hasCell = $detected !== null && ($detected !== 'manual' || preg_match('/^[A-Za-z]{1,3}[1-9]\d*$/', (string) $manualCell));
+
+        try {
+            return ['preview' => app(TableSetup::class)->preview($tab, $hasCell ? $this->chosenPosition($detected, $manualCell) : null), 'error' => null];
+        } catch (GoogleAccessException $e) {
+            return ['preview' => null, 'error' => $e->getMessage()];
+        }
     }
 
     /**

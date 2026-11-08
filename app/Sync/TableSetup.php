@@ -58,6 +58,66 @@ class TableSetup
     }
 
     /**
+     * A spreadsheet-like window of the tab for the setup wizard, with the chosen table marked.
+     * The window always reaches past the marked table, within the given caps.
+     *
+     * @param  array{0: int, 1: int}|null  $headerCell  1-based header row and start column of the chosen table
+     * @return array{rows: list<list<string>>, columns: int, total_rows: int, total_columns: int, mark: ?array{header_row: int, start_column: int, end_column: int, last_row: int}, tables: array<string, string>}
+     *
+     * @throws GoogleAccessException
+     */
+    public function preview(Tab $tab, ?array $headerCell = null, int $rows = 100, int $columns = 26): array
+    {
+        $grid = $this->values($tab)->formatted;
+        $totalRows = count($grid);
+        $totalColumns = $grid === [] ? 0 : max(array_map('count', $grid));
+        $tables = $this->detector->detect($grid);
+        $mark = null;
+
+        if ($headerCell !== null) {
+            [$row, $column] = [$headerCell[0] - 1, $headerCell[1] - 1];
+            $mark = ['header_row' => $row, 'start_column' => $column, 'end_column' => $column, 'last_row' => $row];
+
+            foreach ($tables as $table) {
+                if ($table->headerRow === $row && $table->startColumn === $column) {
+                    $mark = ['header_row' => $row, 'start_column' => $column, 'end_column' => $table->endColumn, 'last_row' => $row + $table->dataRowCount];
+                }
+            }
+
+            $rows = min(max($rows, $mark['last_row'] + 6), 1000);
+            $columns = min(max($columns, $mark['end_column'] + 3), 104);
+        }
+
+        $shownColumns = min($totalColumns, $columns);
+        $window = [];
+
+        foreach (array_slice($grid, 0, $rows) as $row) {
+            $cells = [];
+
+            for ($c = 0; $c < $shownColumns; $c++) {
+                $cells[] = trim((string) ($row[$c] ?? ''));
+            }
+
+            $window[] = $cells;
+        }
+
+        $options = [];
+
+        foreach ($tables as $table) {
+            $options[A1::cell($table->headerRow, $table->startColumn)] = 'r'.($table->headerRow + 1).'c'.($table->startColumn + 1);
+        }
+
+        return [
+            'rows' => $window,
+            'columns' => $shownColumns,
+            'total_rows' => $totalRows,
+            'total_columns' => $totalColumns,
+            'mark' => $mark,
+            'tables' => $options,
+        ];
+    }
+
+    /**
      * Columns of the table whose header row starts at the given 1-based position.
      *
      * @return list<array{header: string, type: string, compare: bool, warning: ?string, sample: string}>

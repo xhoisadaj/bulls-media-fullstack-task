@@ -84,3 +84,14 @@ it('rejects a key that is not unique', function () {
 
     expect(SourceTable::query()->count())->toBe(0);
 });
+
+it('shows a preview of the tab with the chosen table highlighted', function () {
+    $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['tab_id' => $this->tab->id]);
+    nextStep($wizard, 0);
+    $wizard->fillForm(['detected' => 'r3c2']);
+
+    $wizard->assertSee('Tab preview')
+        ->assertSeeHtml('data-cell="B3"')
+        ->assertSeeHtml('data-option="r3c2"')
+        ->assertSeeHtml('ss-grid-head');
+});
