@@ -4,11 +4,13 @@ namespace App\Filament\Resources\ManagedTables\Pages;
 
 use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Models\ManagedTable;
+use App\Models\SourceTable;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
@@ -56,7 +58,10 @@ class BrowseManagedTable extends Page implements HasTable
 
                 $removed = $filters['removed']['value'] ?? null;
 
+                $source = $filters['source']['value'] ?? null;
+
                 $query = DB::table($name)->orderBy('id')
+                    ->when(filled($source), fn ($q) => $q->where('_source_table_id', $source))
                     ->when($removed === '0' || $removed === null, fn ($q) => $q->whereNull('_removed_at'))
                     ->when($removed === '1', fn ($q) => $q->whereNotNull('_removed_at'));
 
@@ -75,6 +80,14 @@ class BrowseManagedTable extends Page implements HasTable
                 $columns,
             ))
             ->filters([
+                SelectFilter::make('source')
+                    ->label('From file')
+                    ->options(fn (): array => $columns === [] ? [] : SourceTable::query()
+                        ->whereIn('id', DB::table($name)->distinct()->pluck('_source_table_id'))
+                        ->with('tab.spreadsheet')
+                        ->get()
+                        ->mapWithKeys(fn (SourceTable $table) => [$table->id => $table->label()])
+                        ->all()),
                 TernaryFilter::make('removed')->label('Removed rows')->placeholder('Hide removed')->trueLabel('Only removed')->falseLabel('Hide removed'),
             ])
             ->paginated([25, 50, 100]);

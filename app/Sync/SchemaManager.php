@@ -120,7 +120,7 @@ class SchemaManager
 
             $seen[$target] = true;
 
-            if (isset($existing[$target]) && ! in_array($existing[$target], self::COMPATIBLE[$column['type']->value], true)) {
+            if (isset($existing[$target]) && ! $this->fits($existing[$target], $column['type'])) {
                 $errors[] = 'Column "'.$table.'.'.$target.'" already exists as '.$existing[$target].', which doesn\'t fit type '.$column['type']->value.'. Map it to a new column instead.';
             }
         }
@@ -290,6 +290,28 @@ class SchemaManager
         Schema::dropIfExists($table->name);
         Log::notice('Target table dropped', ['table' => $table->name, 'user_id' => $user?->id ?? auth()->id()]);
         $table->delete();
+    }
+
+    /**
+     * Whether values of a sheet column type can be saved in an existing MySQL column type.
+     */
+    public function fits(string $mysqlType, ColumnType $type): bool
+    {
+        return in_array(strtolower($mysqlType), self::COMPATIBLE[$type->value], true);
+    }
+
+    /**
+     * The columns a mapping can write to in an existing table (system columns left out).
+     *
+     * @return array<string, string> column name => MySQL type name, in table order
+     */
+    public function targetColumns(string $table): array
+    {
+        if (! Schema::hasTable($table)) {
+            return [];
+        }
+
+        return array_diff_key($this->existingTypes($table), array_flip(self::SYSTEM_COLUMNS));
     }
 
     /**

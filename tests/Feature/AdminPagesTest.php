@@ -6,6 +6,7 @@ use App\Filament\Resources\ManagedTables\Pages\ListManagedTables;
 use App\Filament\Resources\Mappings\Pages\CreateMapping;
 use App\Filament\Resources\Mappings\Pages\EditMapping;
 use App\Filament\Resources\Mappings\Pages\ListMappings;
+use App\Filament\Resources\Mappings\Schemas\MappingForm;
 use App\Filament\Resources\PendingChanges\Pages\ListPendingChanges;
 use App\Filament\Resources\SourceTables\Pages\CreateSourceTable;
 use App\Filament\Resources\SourceTables\Pages\EditSourceTable;
@@ -134,4 +135,33 @@ it('rejects an OAuth callback whose state does not match', function () {
         ->assertRedirect('/admin/google-connection');
 
     expect(GoogleSetting::current()->secret('refresh_token'))->toBeNull();
+});
+
+it('maps a second file into an existing table by picking its columns', function () {
+    $paris = SourceTable::query()->where('name', 'Paris orders')->first();
+    $returns = SourceTable::query()->where('name', 'Returns')->first();
+    $sales = ManagedTable::query()->where('name', 'sales')->first();
+
+    $matched = MappingForm::mapMatching('sales', $paris->id, []);
+    $targets = collect($matched['columns'])->pluck('target_column')->all();
+
+    expect($matched['count'])->toBe(2)->and($targets)->toBe(['amount', 'order_id'])
+        ->and(MappingForm::targetOptions('sales', null))->toHaveKeys(['order_id', 'order_date', 'name', 'product_price', 'amount'])
+        ->and(MappingForm::targetSearch('sales', 'Product'))->toBe(['product_price' => 'product_price · decimal', 'product' => '+ New column "product"'])
+        ->and((string) MappingForm::typeNote('sales', $returns->columns()->where('header', 'reason')->value('id'), 'amount'))->toContain("values don't fit")
+        ->and((string) MappingForm::overview('sales', $paris->id, $matched['columns']))
+        ->toContain('← amount')->toContain('not filled by this file');
+
+    Livewire::test(CreateMapping::class)
+        ->fillForm(['source_table_id' => $paris->id, 'target_mode' => 'existing', 'managed_table_id' => $sales->id])
+        ->assertSee('Columns of sales')
+        ->assertSee('Map matching columns');
+});
+
+it('filters a target table by the file its rows came from', function () {
+    $london = SourceTable::query()->where('name', 'London orders')->first();
+
+    Livewire::test(BrowseManagedTable::class, ['record' => ManagedTable::query()->where('name', 'sales')->first()->getRouteKey()])
+        ->filterTable('source', $london->id)
+        ->assertCountTableRecords(DB::table('sales')->where('_source_table_id', $london->id)->whereNull('_removed_at')->count());
 });

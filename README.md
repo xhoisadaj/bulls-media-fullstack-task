@@ -149,9 +149,9 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 1. **Settings → Google connection:** set the OAuth client (or paste its JSON) and click **Connect Google account**, and/or set an API key. ([docs/GOOGLE_API.md](docs/GOOGLE_API.md))
 2. **Sources → Spreadsheets:** **Fetch from Google** (OAuth) or **Add by URL**. Then open a spreadsheet and enable its tabs.
 3. **Set up a table:** the wizard detects the tables in the tab, suggests column types from the data, and warns about volatile formulas and formula errors. Choose the identity mode (the key is checked for uniqueness) and Review or Auto.
-4. **Mappings:** choose an existing target table or create one, then pick the columns and their database names. The plan is validated before any `ALTER TABLE`. **Preview** shows what will be written.
+4. **Mappings:** choose an existing target table or create one, then pick the columns and their database names. With an existing table (e.g. a second file into `sales`), each sheet column gets a dropdown of the table's columns and types (or type a name to add a new one), **Map matching columns** pairs same-named columns in one click, a type that doesn't fit is flagged on the row, and an overview shows which columns this file fills and which stay empty for its rows. The plan is validated before any `ALTER TABLE`. **Preview** shows what will be written.
 5. **Sync now**, or wait for the daily run. **Review → Review inbox** shows changes with field diffs, which you approve or reject. **Review → Alerts** shows new or missing columns (with "Map this column"), moved headers, blocked mass removals, access problems and fallback use.
-6. **Activity:** sync history (counts, skipped rows, the credential used), target tables with a data browser, and schema history.
+6. **Activity:** sync history (counts, skipped rows, the credential used), target tables with a data browser (filter by the file rows came from), schema history, and removal of empty columns and tables.
 
 ## Demo scenarios
 
