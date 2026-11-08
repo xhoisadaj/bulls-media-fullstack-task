@@ -88,27 +88,51 @@ it('goes from sheet to database in one wizard and imports the first sync right a
         ->and(Schema::hasColumn('wizard_orders', 'price'))->toBeFalse();
 });
 
-it('adds a second file to an existing table, reusing matching columns', function () {
+it('adds a second file to an existing table: same names are matched, the rest must be picked', function () {
     throughTarget(Livewire::test(CreateSourceTable::class), $this->tab->id, 'r3c2', 'sales_existing')
         ->fillForm(['identity_mode' => IdentityMode::Content->value, 'apply_mode' => 'auto'])
         ->call('create')
         ->assertHasNoFormErrors();
 
     $second = Tab::query()->create(['spreadsheet_id' => $this->tab->spreadsheet_id, 'google_tab_id' => 1, 'name' => 'More']);
-    app(SheetsGateway::class)->setTab('sheet-w', 'More', [['order_id', 'price', 'region'], [2001, 9, 'north']], 1);
+    app(SheetsGateway::class)->setTab('sheet-w', 'More', [['order_id', 'item', 'price', 'region'], [2001, 'Hat', 9, 'north']], 1);
 
     $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['spreadsheet_id' => $second->spreadsheet_id, 'tab_id' => $second->id]);
     nextStep($wizard, 0);
     $wizard->fillForm(['detected' => 'r1c1']);
     nextStep($wizard, 1);
     $wizard->fillForm(['target_mode' => 'existing', 'managed_table_id' => ManagedTable::query()->where('name', 'sales_existing')->value('id')]);
-    nextStep($wizard, 2)
+    nextStep($wizard, 2)->assertHasNoFormErrors();
+
+    $columns = collect($wizard->get('data.columns'));
+
+    expect($columns->pluck('target_pick', 'header')->all())->toBe(['order_id' => 'order_id', 'item' => null, 'price' => 'price', 'region' => null])
+        ->and($columns->firstWhere('header', 'price')['type'])->toBe('integer');
+
+    $wizard->assertSee('Columns of sales_existing')->assertSee('product_name · varchar')
         ->fillForm(['identity_mode' => IdentityMode::Content->value, 'apply_mode' => 'auto'])
+        ->call('create')
+        ->assertHasFormErrors();
+
+    $edited = $wizard->get('data.columns');
+
+    foreach ($edited as $key => $column) {
+        $edited[$key]['target_pick'] = match ($column['header']) {
+            'item' => 'product_name',
+            'region' => '__new__',
+            default => $column['target_pick'],
+        };
+    }
+
+    $wizard->fillForm(['columns' => $edited])
         ->call('create')
         ->assertHasNoFormErrors();
 
-    expect(DB::table('sales_existing')->count())->toBe(3)
-        ->and(DB::table('sales_existing')->where('order_id', 2001)->value('region'))->toBe('north');
+    $row = DB::table('sales_existing')->where('order_id', 2001)->first();
+
+    expect($row->product_name)->toBe('Hat')
+        ->and($row->region)->toBe('north')
+        ->and(DB::table('sales_existing')->count())->toBe(3);
 });
 
 it('accepts a manually entered header cell', function () {

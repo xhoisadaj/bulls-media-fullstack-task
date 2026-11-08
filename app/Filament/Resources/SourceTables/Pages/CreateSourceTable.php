@@ -29,6 +29,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -155,8 +156,23 @@ class CreateSourceTable extends CreateRecord
                         ->options(fn () => ManagedTable::query()->orderBy('name')->pluck('name', 'id'))
                         ->visible(fn (Get $get): bool => $get('target_mode') === 'existing')
                         ->required(fn (Get $get): bool => $get('target_mode') === 'existing')
-                        ->helperText('Columns with the same name are filled; the others are added.'),
-                ]),
+                        ->helperText('On the next step, each sheet column is matched to a column of this table by name; you pick the rest.'),
+                ])
+                ->afterValidation(function (Get $get, Set $set): void {
+                    $existing = self::existingColumns($get('target_mode'), $get('managed_table_id'));
+                    $columns = $get('columns') ?? [];
+
+                    foreach ($columns as $key => $column) {
+                        $match = app(SchemaManager::class)->suggestName((string) $column['header']);
+                        $columns[$key]['target_pick'] = isset($existing[$match]) ? $match : null;
+
+                        if (isset($existing[$match])) {
+                            $columns[$key]['type'] = app(SchemaManager::class)->columnTypeOf($existing[$match])?->value ?? $column['type'];
+                        }
+                    }
+
+                    $set('columns', $columns);
+                }),
 
             Step::make('Columns')
                 ->description('Names, types and options')
@@ -173,6 +189,8 @@ class CreateSourceTable extends CreateRecord
                         .'Turn it off for columns that change by themselves and would otherwise flag every row each day, e.g. a "last updated" time or a formula with TODAY() or NOW(). It is switched off automatically for those formulas.</li>'
                         .'</ul></div>'
                     )),
+                    Text::make(fn (Get $get): ?HtmlString => self::existingOverview($get('target_mode'), $get('managed_table_id'), $get('columns') ?? []))
+                        ->visible(fn (Get $get): bool => $get('target_mode') === 'existing'),
                     Repeater::make('columns')
                         ->label('Columns of the sheet table')
                         ->addable(false)
@@ -189,25 +207,51 @@ class CreateSourceTable extends CreateRecord
                         ->schema([
                             TextInput::make('header')->label('Sheet column')->hiddenLabel()->disabled()->dehydrated(),
                             Toggle::make('save')->label('Save')->hiddenLabel()->default(true)->live(),
-                            TextInput::make('target')
-                                ->label('Database column')
-                                ->hiddenLabel()
-                                ->datalist(fn (Get $get): array => array_keys(self::existingColumns($get('../../target_mode'), $get('../../managed_table_id'))))
-                                ->required(fn (Get $get): bool => (bool) $get('save'))
-                                ->disabled(fn (Get $get): bool => ! $get('save'))
-                                ->dehydrated()
-                                ->live(onBlur: true)
-                                ->rule(fn (Get $get) => function (string $attribute, mixed $value, \Closure $fail) use ($get) {
-                                    if ($get('save') && ($error = app(SchemaManager::class)->nameError((string) $value, 'Column'))) {
-                                        $fail($error);
-                                    }
-                                }),
-                            Select::make('type')->label('Type')->hiddenLabel()->options(ColumnType::class)->required()->live(),
+                            Group::make([
+                                Select::make('target_pick')
+                                    ->label('Database column')
+                                    ->hiddenLabel()
+                                    ->placeholder('Choose a column…')
+                                    ->options(fn (Get $get): array => self::pickOptions($get('../../target_mode'), $get('../../managed_table_id')))
+                                    ->visible(fn (Get $get): bool => $get('../../target_mode') === 'existing')
+                                    ->required(fn (Get $get): bool => $get('../../target_mode') === 'existing' && (bool) $get('save'))
+                                    ->disabled(fn (Get $get): bool => ! $get('save'))
+                                    ->dehydrated()
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, Get $get, Set $set): void {
+                                        $existing = self::existingColumns($get('../../target_mode'), $get('../../managed_table_id'))[$state] ?? null;
+
+                                        if ($existing !== null) {
+                                            $set('type', app(SchemaManager::class)->columnTypeOf($existing)?->value ?? $get('type'));
+                                        } elseif ($state === self::NEW_COLUMN && blank($get('target'))) {
+                                            $set('target', app(SchemaManager::class)->suggestName((string) $get('header')));
+                                        }
+                                    }),
+                                TextInput::make('target')
+                                    ->label('Database column')
+                                    ->hiddenLabel()
+                                    ->placeholder('new column name')
+                                    ->visible(fn (Get $get): bool => $get('../../target_mode') !== 'existing' || $get('target_pick') === self::NEW_COLUMN)
+                                    ->required(fn (Get $get): bool => (bool) $get('save'))
+                                    ->disabled(fn (Get $get): bool => ! $get('save'))
+                                    ->dehydrated()
+                                    ->live(onBlur: true)
+                                    ->rule(fn (Get $get) => function (string $attribute, mixed $value, \Closure $fail) use ($get) {
+                                        if ($get('save') && ($error = app(SchemaManager::class)->nameError((string) $value, 'Column'))) {
+                                            $fail($error);
+                                        } elseif ($get('save') && isset(self::existingColumns($get('../../target_mode'), $get('../../managed_table_id'))[trim((string) $value)])) {
+                                            $fail('"'.trim((string) $value).'" already exists in the table: pick it from the list instead.');
+                                        }
+                                    }),
+                            ]),
+                            Select::make('type')->label('Type')->hiddenLabel()->options(ColumnType::class)->required()->live()
+                                ->disabled(fn (Get $get): bool => self::pickedExisting($get('../../target_mode'), $get('../../managed_table_id'), $get('target_pick')))
+                                ->dehydrated(),
                             Toggle::make('compare')->label('Compare')->hiddenLabel(),
                             Text::make(fn (Get $get): HtmlString => self::sampleCells(
                                 $get('samples') ?? [],
                                 $get('warning'),
-                                self::typeConflict($get('../../target_mode'), $get('../../managed_table_id'), $get('save') ? $get('target') : null, $get('type')),
+                                self::typeConflict($get('../../target_mode'), $get('../../managed_table_id'), $get('save') ? self::finalTarget($get('../../target_mode'), $get('target_pick'), $get('target')) : null, $get('type')),
                             )),
                         ]),
                     ...SourceTableForm::identityFields(
@@ -240,13 +284,14 @@ class CreateSourceTable extends CreateRecord
             throw ValidationException::withMessages(['data.columns' => 'Tick "Save" for at least one column.']);
         }
 
-        $plan = array_map(fn (array $c): array => ['target' => trim((string) $c['target']), 'type' => ColumnType::from(SourceTableForm::enumValue($c['type']))], $saved);
+        $mode = $data['target_mode'] ?? 'new';
+        $plan = array_map(fn (array $c): array => ['target' => self::finalTarget($mode, $c['target_pick'] ?? null, $c['target'] ?? null), 'type' => ColumnType::from(SourceTableForm::enumValue($c['type']))], $saved);
 
         if ($errors = app(SchemaManager::class)->validatePlan($tableName, $plan)) {
             throw ValidationException::withMessages(['data.columns' => $errors]);
         }
 
-        $mapping = DB::transaction(function () use ($data, $columns, $tableName) {
+        $mapping = DB::transaction(function () use ($data, $columns, $tableName, $mode) {
             $table = SourceTable::query()->create([
                 'tab_id' => $data['tab_id'],
                 'name' => $data['name'],
@@ -279,7 +324,7 @@ class CreateSourceTable extends CreateRecord
 
             foreach ($columns as $column) {
                 if ($column['save'] ?? false) {
-                    $mapping->columns()->create(['source_column_id' => $ids[$column['header']], 'target_column' => trim((string) $column['target'])]);
+                    $mapping->columns()->create(['source_column_id' => $ids[$column['header']], 'target_column' => self::finalTarget($mode, $column['target_pick'] ?? null, $column['target'] ?? null)]);
                 }
             }
 
@@ -373,6 +418,85 @@ class CreateSourceTable extends CreateRecord
         }
 
         return $descriptions;
+    }
+
+    /** The "+ New column" choice in the database column list of an existing table. */
+    private const NEW_COLUMN = '__new__';
+
+    /**
+     * The database column a sheet column goes to: the picked column of an existing table, or the typed name.
+     */
+    private static function finalTarget(mixed $mode, mixed $pick, mixed $typed): string
+    {
+        return trim((string) ($mode === 'existing' && filled($pick) && $pick !== self::NEW_COLUMN ? $pick : $typed));
+    }
+
+    private static function pickedExisting(mixed $mode, mixed $managedTableId, mixed $pick): bool
+    {
+        return filled($pick) && $pick !== self::NEW_COLUMN && isset(self::existingColumns($mode, $managedTableId)[$pick]);
+    }
+
+    /**
+     * The existing table's columns with their types, plus "+ New column".
+     *
+     * @return array<string, string>
+     */
+    private static function pickOptions(mixed $mode, mixed $managedTableId): array
+    {
+        $options = [];
+
+        foreach (self::existingColumns($mode, $managedTableId) as $column => $type) {
+            $options[$column] = $column.' · '.$type;
+        }
+
+        return $options + [self::NEW_COLUMN => '+ New column…'];
+    }
+
+    /**
+     * Which columns of the existing table this file fills, which stay empty for its rows, and which it adds.
+     *
+     * @param  array<array-key, array<string, mixed>>  $columns
+     */
+    private static function existingOverview(mixed $mode, mixed $managedTableId, array $columns): ?HtmlString
+    {
+        $existing = self::existingColumns($mode, $managedTableId);
+        $table = ManagedTable::query()->find($managedTableId)?->name;
+
+        if ($table === null) {
+            return null;
+        }
+
+        $filled = [];
+        $added = [];
+        $open = 0;
+
+        foreach ($columns as $column) {
+            if (! ($column['save'] ?? false)) {
+                continue;
+            }
+
+            $target = self::finalTarget($mode, $column['target_pick'] ?? null, $column['target'] ?? null);
+
+            if ($target === '') {
+                $open++;
+            } elseif (isset($existing[$target])) {
+                $filled[$target] = $column['header'];
+            } else {
+                $added[] = $target;
+            }
+        }
+
+        $chips = fn (array $items): string => $items === [] ? '<span class="ss-null">none</span>' : implode('', array_map(fn ($i) => '<span class="ss-chip ss-mono">'.e($i).'</span>', $items));
+        $empty = array_keys(array_diff_key($existing, $filled));
+
+        return new HtmlString(
+            '<div class="ss ss-stack"><p class="ss-strong">Columns of '.e($table).'</p>'
+            .'<div><span class="ss-muted">Filled by this file:</span> <div class="ss-chips">'.$chips(array_map(fn ($t, $h) => $t.' ← '.$h, array_keys($filled), $filled)).'</div></div>'
+            .'<div><span class="ss-muted">Stay empty for this file\'s rows:</span> <div class="ss-chips">'.$chips($empty).'</div></div>'
+            .'<div><span class="ss-muted">New columns this file adds:</span> <div class="ss-chips">'.$chips($added).'</div></div>'
+            .($open > 0 ? '<p class="ss-error">'.$open.' column(s) below have no match in '.e($table).': pick a column, "+ New column", or untick Save.</p>' : '')
+            .'</div>'
+        );
     }
 
     /**
