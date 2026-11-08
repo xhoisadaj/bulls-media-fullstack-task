@@ -122,7 +122,7 @@ When a change is approved, the source record is updated first and then every tar
 
 When a column is added to a mapping and the target table doesn't have it, the sync runs `ALTER TABLE … ADD COLUMN` and **backfills** the existing rows, without creating change entries. The schema manager:
 - only touches tables it created (`managed_tables`), never `users` or other app tables;
-- only adds columns: it never drops, retypes or renames them;
+- the sync only adds columns, and never retypes or renames them. An admin can **remove empty columns** and **delete empty tables** under Target tables (one by one or several at once): only when no row holds a value and no mapping uses them, after confirming the password;
 - validates names (`^[a-z][a-z0-9_]{0,63}$`, no reserved words) and types (from a fixed list);
 - runs schema changes before data writes (MySQL commits implicitly on DDL);
 - logs every change in `schema_histories`.

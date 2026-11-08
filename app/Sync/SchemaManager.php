@@ -5,14 +5,18 @@ namespace App\Sync;
 use App\Enums\ColumnType;
 use App\Models\ManagedTable;
 use App\Models\Mapping;
+use App\Models\MappingColumn;
 use App\Models\SchemaHistory;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The only place that runs CREATE TABLE / ALTER TABLE. Add-only: it never drops,
- * retypes or renames, and it only touches tables the sync created itself.
+ * The only place that runs CREATE / ALTER / DROP TABLE, and only on tables the sync created itself.
+ * Syncs only ever add. Removing is an admin action, allowed only for what is provably empty and
+ * unmapped, so no data can be lost. It never retypes or renames.
  */
 class SchemaManager
 {
@@ -173,6 +177,119 @@ class SchemaManager
         }
 
         return $changes;
+    }
+
+    /**
+     * The table's own columns (not the sync's system columns), with what would block removing each.
+     *
+     * @return array<string, array{type: string, filled: int, mapped_by: list<string>, problem: ?string}>
+     */
+    public function columnUsage(ManagedTable $table): array
+    {
+        if (! Schema::hasTable($table->name)) {
+            return [];
+        }
+
+        $mappedBy = MappingColumn::query()
+            ->whereHas('mapping', fn ($q) => $q->where('managed_table_id', $table->id))
+            ->with('mapping.sourceTable')
+            ->get()
+            ->groupBy('target_column')
+            ->map(fn ($columns) => $columns->map(fn (MappingColumn $c) => $c->mapping->sourceTable->name)->unique()->values()->all());
+
+        $usage = [];
+
+        foreach ($this->existingTypes($table->name) as $column => $type) {
+            if (in_array($column, self::SYSTEM_COLUMNS, true)) {
+                continue;
+            }
+
+            $filled = DB::table($table->name)->whereNotNull($column)->count();
+            $mapped = $mappedBy->get($column, []);
+
+            $usage[$column] = [
+                'type' => $type,
+                'filled' => $filled,
+                'mapped_by' => $mapped,
+                'problem' => match (true) {
+                    $mapped !== [] => 'mapped by '.implode(', ', $mapped).'; remove it from the mapping first',
+                    $filled > 0 => $filled.' row(s) have data',
+                    default => null,
+                },
+            ];
+        }
+
+        return $usage;
+    }
+
+    /**
+     * Drops empty, unmapped columns. All or nothing: any problem and nothing is dropped.
+     *
+     * @param  list<string>  $columns
+     *
+     * @throws SchemaException
+     */
+    public function dropColumns(ManagedTable $table, array $columns, ?User $user = null): void
+    {
+        $usage = $this->columnUsage($table);
+        $errors = [];
+
+        foreach ($columns as $column) {
+            if (in_array($column, self::SYSTEM_COLUMNS, true)) {
+                $errors[] = 'Column "'.$column.'" is needed by the sync and can\'t be removed.';
+            } elseif (! isset($usage[$column])) {
+                $errors[] = 'Column "'.$column.'" doesn\'t exist in '.$table->name.'.';
+            } elseif ($usage[$column]['problem'] !== null) {
+                $errors[] = 'Column "'.$column.'" can\'t be removed: '.$usage[$column]['problem'].'.';
+            }
+        }
+
+        if ($columns === [] || $errors !== []) {
+            throw new SchemaException($errors ?: ['Choose at least one column.']);
+        }
+
+        Schema::table($table->name, fn (Blueprint $blueprint) => $blueprint->dropColumn($columns));
+
+        foreach ($columns as $column) {
+            $this->log($table->id, 'drop_column', $column, $usage[$column]['type'], $user);
+        }
+    }
+
+    /**
+     * Why the table can't be deleted. Empty means it's safe: no mapping writes into it and it holds no rows.
+     *
+     * @return list<string>
+     */
+    public function dropTableProblems(ManagedTable $table): array
+    {
+        $problems = [];
+        $mappings = $table->mappings()->with('sourceTable')->get();
+
+        if ($mappings->isNotEmpty()) {
+            $problems[] = 'Mappings still write into it ('.$mappings->map(fn (Mapping $m) => $m->sourceTable->name)->implode(', ').'). Delete them first.';
+        }
+
+        if (Schema::hasTable($table->name) && ($rows = DB::table($table->name)->count()) > 0) {
+            $problems[] = 'It holds '.$rows.' row(s), including removed ones.';
+        }
+
+        return $problems;
+    }
+
+    /**
+     * Drops an empty, unmapped table and forgets it (its schema history goes with it, so the drop is logged).
+     *
+     * @throws SchemaException
+     */
+    public function dropTable(ManagedTable $table, ?User $user = null): void
+    {
+        if ($problems = $this->dropTableProblems($table)) {
+            throw new SchemaException($problems);
+        }
+
+        Schema::dropIfExists($table->name);
+        Log::notice('Target table dropped', ['table' => $table->name, 'user_id' => $user?->id ?? auth()->id()]);
+        $table->delete();
     }
 
     /**

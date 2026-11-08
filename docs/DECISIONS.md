@@ -11,7 +11,7 @@ Requirement #6 asks the sync to add a column to the database table when one is a
 - **Real columns** (chosen): normal SQL, real types, indexes.
 
 Changing the schema at runtime has risks, so the schema manager is strict:
-- **add-only:** it never drops, retypes or renames;
+- **the sync is add-only:** it never drops, retypes or renames. Removing is a separate admin action (Target tables → Remove columns / Delete table), allowed only for columns and tables that hold no data and that no mapping uses, so nothing can be lost; it asks for the password and logs column removals;
 - **owned tables only:** `managed_tables`, so `users` can never be altered;
 - **validated:** names must match `^[a-z][a-z0-9_]{0,63}$` and aren't reserved words; types come from a fixed list; conflicts with existing column types are rejected;
 - **DDL before data:** schema changes run outside data transactions, because MySQL commits implicitly on DDL;
