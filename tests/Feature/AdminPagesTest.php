@@ -3,6 +3,7 @@
 use App\Filament\Pages\GoogleConnection;
 use App\Filament\Resources\ManagedTables\Pages\BrowseManagedTable;
 use App\Filament\Resources\ManagedTables\Pages\ListManagedTables;
+use App\Filament\Resources\Mappings\MappingResource;
 use App\Filament\Resources\Mappings\Pages\CreateMapping;
 use App\Filament\Resources\Mappings\Pages\EditMapping;
 use App\Filament\Resources\Mappings\Pages\ListMappings;
@@ -239,4 +240,21 @@ it('clears the syncing flag when the queued sync has run', function () {
 
     expect($spreadsheet->isSyncing())->toBeFalse()
         ->and($spreadsheet->syncRuns()->exists())->toBeTrue();
+});
+
+it('opens the existing mapping when the sheet table already saves into the chosen table, and hides used columns', function () {
+    $london = SourceTable::query()->where('name', 'London orders')->first();
+    $sales = ManagedTable::query()->where('name', 'sales')->first();
+    $mapping = Mapping::query()->where('source_table_id', $london->id)->where('managed_table_id', $sales->id)->first();
+
+    Livewire::test(CreateMapping::class)
+        ->fillForm(['source_table_id' => $london->id, 'target_mode' => 'existing'])
+        ->set('data.managed_table_id', $sales->id)
+        ->assertRedirect(MappingResource::getUrl('edit', ['record' => $mapping]));
+
+    $used = $mapping->columns()->pluck('source_column_id')->all();
+    $options = MappingForm::columnOptions($london->id, exclude: $used);
+
+    expect(array_intersect(array_keys($options), $used))->toBe([])
+        ->and($options)->toContain('notes');
 });

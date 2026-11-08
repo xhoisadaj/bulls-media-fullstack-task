@@ -38,9 +38,15 @@ class SourceTablesTable
                 SelectFilter::make('status')->options(SourceTableStatus::class),
             ])
             ->recordActions([
-                Action::make('addMapping')
-                    ->label('Add mapping')
+                Action::make('editColumns')
+                    ->label('Add or change columns')
                     ->icon(Heroicon::OutlinedArrowsRightLeft)
+                    ->visible(fn (SourceTable $record): bool => $record->mappings()->exists())
+                    ->url(fn (SourceTable $record) => MappingResource::getUrl('edit', ['record' => $record->mappings()->orderBy('id')->first()])),
+                Action::make('addMapping')
+                    ->label(fn (SourceTable $record): string => $record->mappings()->exists() ? 'Save into another table' : 'Save into a table')
+                    ->icon(Heroicon::OutlinedPlusCircle)
+                    ->color('gray')
                     ->url(fn (SourceTable $record) => MappingResource::getUrl('create', ['source_table' => $record->id])),
                 EditAction::make(),
                 DeleteAction::make()->modalDescription('Its stored records and pending changes are removed. Target tables keep their data.'),

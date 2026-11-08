@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\Mappings\Schemas;
 
 use App\Enums\ColumnType;
+use App\Filament\Resources\Mappings\MappingResource;
 use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Models\ManagedTable;
+use App\Models\Mapping;
 use App\Models\SourceColumn;
 use App\Models\SourceTable;
 use App\Sync\SchemaManager;
@@ -45,6 +47,7 @@ class MappingForm
                         ->searchable()
                         ->required()
                         ->live()
+                        ->afterStateUpdated(fn (Get $get, $livewire, string $operation) => self::openExistingMapping($get, $livewire, $operation))
                         ->disabledOn('edit'),
                     Toggle::make('is_active')->label('Active')->default(true)->inline(false),
                     Radio::make('target_mode')
@@ -58,6 +61,7 @@ class MappingForm
                         ->label('Table')
                         ->options(fn () => ManagedTable::query()->orderBy('name')->pluck('name', 'id'))
                         ->live()
+                        ->afterStateUpdated(fn (Get $get, $livewire, string $operation) => self::openExistingMapping($get, $livewire, $operation))
                         ->visible(fn (Get $get, string $operation) => $operation === 'edit' || $get('target_mode') === 'existing')
                         ->required(fn (Get $get, string $operation) => $operation === 'create' && $get('target_mode') === 'existing')
                         ->disabledOn('edit'),
@@ -111,10 +115,12 @@ class MappingForm
                             Select::make('source_column_id')
                                 ->label('Sheet column')
                                 ->hiddenLabel()
-                                ->options(fn (Get $get) => self::columnOptions($get('../../source_table_id')))
+                                ->options(fn (Get $get) => self::columnOptions(
+                                    $get('../../source_table_id'),
+                                    exclude: array_diff(array_filter(array_column($get('../../columns') ?? [], 'source_column_id')), [$get('source_column_id')]),
+                                ))
                                 ->required()
                                 ->distinct()
-                                ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                                 ->live()
                                 ->afterStateUpdated(function ($state, Get $get, Set $set) {
                                     $column = SourceColumn::query()->find($state);
@@ -166,6 +172,34 @@ class MappingForm
                         ]),
                 ]),
         ]);
+    }
+
+    /**
+     * A sheet table saves into a database table through one mapping. When "create" picks a pair that is
+     * already mapped, the existing mapping is opened instead, so its mapped columns show and new ones are added there.
+     */
+    public static function openExistingMapping(Get $get, mixed $livewire, string $operation): void
+    {
+        if ($operation !== 'create' || $get('target_mode') === 'new') {
+            return;
+        }
+
+        $mapping = Mapping::query()
+            ->where('source_table_id', $get('source_table_id'))
+            ->where('managed_table_id', $get('managed_table_id'))
+            ->first();
+
+        if ($mapping === null) {
+            return;
+        }
+
+        Notification::make()
+            ->title($mapping->sourceTable->name.' already saves into '.$mapping->managedTable->name)
+            ->body('Its mapped columns are listed here. Add the new column at the bottom.')
+            ->info()
+            ->send();
+
+        $livewire->redirect(MappingResource::getUrl('edit', ['record' => $mapping]), navigate: true);
     }
 
     /**
@@ -316,9 +350,10 @@ class MappingForm
     }
 
     /**
+     * @param  array<int|string>  $exclude  sheet columns already used by other rows (hidden from the list)
      * @return array<int, string>
      */
-    public static function columnOptions(mixed $sourceTableId): array
+    public static function columnOptions(mixed $sourceTableId, array $exclude = []): array
     {
         if (! $sourceTableId) {
             return [];
@@ -326,6 +361,7 @@ class MappingForm
 
         return SourceColumn::query()
             ->where('source_table_id', $sourceTableId)
+            ->whereNotIn('id', array_map('intval', $exclude))
             ->orderBy('position')
             ->get()
             ->mapWithKeys(fn (SourceColumn $c) => [$c->id => $c->header.($c->is_present ? '' : ' (missing from sheet)')])
