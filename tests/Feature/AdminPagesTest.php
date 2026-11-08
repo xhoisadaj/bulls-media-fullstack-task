@@ -130,6 +130,22 @@ it('saves the API key encrypted and only after the password is confirmed', funct
         ->and(CredentialAudit::query()->where('credential', 'api_key')->exists())->toBeTrue();
 });
 
+it('fills the client ID and secret from a pasted client JSON and reloads the page after saving', function () {
+    $json = json_encode(['web' => ['client_id' => '123-abc.apps.googleusercontent.com', 'client_secret' => 'GOCSPX-test-secret', 'redirect_uris' => ['http://localhost:8000/google/callback']]]);
+
+    Livewire::test(GoogleConnection::class)
+        ->mountAction('editClient')
+        ->fillForm(['client_json' => $json])
+        ->assertSchemaStateSet(['client_id' => '123-abc.apps.googleusercontent.com', 'client_secret' => 'GOCSPX-test-secret'])
+        ->fillForm(['current_password' => 'secret-password'])
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
+        ->assertRedirect(GoogleConnection::getUrl());
+
+    expect(GoogleSetting::current()->oauth_client_id)->toBe('123-abc.apps.googleusercontent.com')
+        ->and(GoogleSetting::current()->hasOAuthClient())->toBeTrue();
+});
+
 it('serves the full admin pages over HTTP', function () {
     foreach (['/admin', '/admin/spreadsheets', '/admin/source-tables', '/admin/mappings', '/admin/pending-changes', '/admin/structure-alerts', '/admin/sync-runs', '/admin/managed-tables', '/admin/google-connection'] as $url) {
         $this->get($url)->assertOk();

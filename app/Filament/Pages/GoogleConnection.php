@@ -17,6 +17,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Validation\ValidationException;
@@ -107,6 +108,7 @@ class GoogleConnection extends Page
                             ->action(function () use ($settings) {
                                 $settings->update(['use_demo_data' => ! $settings->use_demo_data]);
                                 Notification::make()->title('Demo mode '.($settings->use_demo_data ? 'on' : 'off'))->success()->send();
+                                $this->reloadPage();
                             }),
                     ]),
                 ]),
@@ -129,8 +131,18 @@ class GoogleConnection extends Page
             ->schema([
                 Textarea::make('client_json')
                     ->label('Client JSON (optional)')
+                    ->helperText('Pasting it fills in the client ID and secret below.')
                     ->rows(4)
-                    ->placeholder('{"web":{"client_id":"…","client_secret":"…"}}'),
+                    ->placeholder('{"web":{"client_id":"…","client_secret":"…"}}')
+                    ->live(debounce: 400)
+                    ->afterStateUpdated(function (?string $state, Set $set): void {
+                        $client = self::clientFromJson($state);
+
+                        if ($client !== null) {
+                            $set('client_id', $client['client_id'] ?? null);
+                            $set('client_secret', $client['client_secret'] ?? null);
+                        }
+                    }),
                 TextInput::make('client_id')->label('Client ID')->default(GoogleSetting::current()->oauth_client_id),
                 TextInput::make('client_secret')->label('Client secret')->password()->revealable()
                     ->placeholder(GoogleSetting::current()->maskedHint('oauth_client_secret') ?? ''),
@@ -145,7 +157,21 @@ class GoogleConnection extends Page
 
                 Notification::make()->title('OAuth client saved')->body(implode(' ', $warnings) ?: null)
                     ->status($warnings === [] ? 'success' : 'warning')->persistent($warnings !== [])->send();
+                $this->reloadPage();
             });
+    }
+
+    /**
+     * The "web" (or "installed") block of a client JSON downloaded from Google Cloud, or null.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function clientFromJson(?string $json): ?array
+    {
+        $decoded = json_decode(trim((string) $json), true);
+        $client = is_array($decoded) ? ($decoded['web'] ?? $decoded['installed'] ?? null) : null;
+
+        return is_array($client) ? $client : null;
     }
 
     public function disconnectAction(): Action
@@ -160,6 +186,7 @@ class GoogleConnection extends Page
             ->action(function () {
                 app(GoogleSettingsManager::class)->disconnect();
                 Notification::make()->title('Google account disconnected')->success()->send();
+                $this->reloadPage();
             });
     }
 
@@ -175,6 +202,7 @@ class GoogleConnection extends Page
             ->action(function (array $data) {
                 app(GoogleSettingsManager::class)->saveApiKey($data['api_key']);
                 Notification::make()->title('API key saved')->body('Use "Test key" to check it works.')->success()->send();
+                $this->reloadPage();
             });
     }
 
@@ -189,6 +217,7 @@ class GoogleConnection extends Page
             ->action(function () {
                 app(GoogleSettingsManager::class)->removeApiKey();
                 Notification::make()->title('API key removed')->success()->send();
+                $this->reloadPage();
             });
     }
 
@@ -201,6 +230,17 @@ class GoogleConnection extends Page
             ->body($result)
             ->status($result === null ? 'success' : 'danger')
             ->send();
+
+        $this->reloadPage();
+    }
+
+    /**
+     * Shows the new state right away (status, masked values, which buttons are enabled). The page's
+     * schema is built once per request, before the action runs, so it's reloaded in place.
+     */
+    private function reloadPage(): void
+    {
+        $this->redirect(static::getUrl(), navigate: true);
     }
 
     private function currentlyUsing(GoogleSetting $settings): string
