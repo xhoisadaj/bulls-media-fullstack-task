@@ -42,7 +42,7 @@ class SyncSheetsCommand extends Command
                     $this->components->bulletList([$error['message']]);
                 }
             } else {
-                SyncSpreadsheetJob::dispatch($spreadsheet, $trigger, (bool) $this->option('allow-mass-removal'));
+                SyncSpreadsheetJob::start($spreadsheet, $trigger, (bool) $this->option('allow-mass-removal'));
                 $this->components->info('Queued sync for "'.$spreadsheet->name.'".');
             }
         }

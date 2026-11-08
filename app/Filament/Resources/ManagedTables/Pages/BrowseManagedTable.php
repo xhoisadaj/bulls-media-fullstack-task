@@ -15,8 +15,10 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\HtmlString;
 
 /**
  * Read-only view of a target table's rows, straight from MySQL.
@@ -41,6 +43,29 @@ class BrowseManagedTable extends Page implements HasTable
         $record = $this->getRecord();
 
         return 'Table '.$record->name;
+    }
+
+    /**
+     * True while a sync of any spreadsheet that writes into this table is queued or running.
+     */
+    public function isSyncing(): bool
+    {
+        /** @var ManagedTable $record */
+        $record = $this->getRecord();
+
+        return $record->mappings()->with('sourceTable.tab.spreadsheet')->get()
+            ->contains(fn ($mapping) => $mapping->sourceTable?->tab?->spreadsheet?->isSyncing());
+    }
+
+    public function getSubheading(): string|Htmlable|null
+    {
+        if (! $this->isSyncing()) {
+            return null;
+        }
+
+        return new HtmlString(Blade::render(
+            '<span style="display:inline-flex;align-items:center;gap:0.5rem"><x-filament::loading-indicator style="width:1.1rem;height:1.1rem" /> Syncing the data from Google… the rows appear here by themselves.</span>'
+        ));
     }
 
     public function table(Table $table): Table
@@ -89,6 +114,9 @@ class BrowseManagedTable extends Page implements HasTable
                         ->mapWithKeys(fn (SourceTable $table) => [$table->id => $table->label()])
                         ->all()),
             ])
+            ->poll(fn (): ?string => $this->isSyncing() ? '2s' : null)
+            ->emptyStateHeading(fn (): string => $this->isSyncing() ? 'Syncing…' : 'No rows yet')
+            ->emptyStateDescription(fn (): ?string => $this->isSyncing() ? 'The data is being read from Google. This page updates by itself.' : 'Rows appear here after a sync.')
             ->paginated([25, 50, 100]);
     }
 }

@@ -20,7 +20,7 @@ final class SyncActions
             ->label('Sync now')
             ->icon(Heroicon::OutlinedArrowPath)
             ->action(function (Spreadsheet $record) {
-                SyncSpreadsheetJob::dispatch($record, TriggerType::Manual);
+                SyncSpreadsheetJob::start($record, TriggerType::Manual);
 
                 Notification::make()
                     ->title('Sync started for "'.$record->name.'"')
@@ -39,7 +39,7 @@ final class SyncActions
             ->requiresConfirmation()
             ->modalDescription('Use this only when you really removed more than half of a table\'s rows. Removals still wait for approval in the review inbox.')
             ->action(function (Spreadsheet $record) {
-                SyncSpreadsheetJob::dispatch($record, TriggerType::Manual, allowMassRemoval: true);
+                SyncSpreadsheetJob::start($record, TriggerType::Manual, allowMassRemoval: true);
                 Notification::make()->title('Sync started (mass removal allowed)')->warning()->send();
             });
     }

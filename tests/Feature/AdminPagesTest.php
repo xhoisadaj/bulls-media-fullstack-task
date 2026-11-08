@@ -16,6 +16,7 @@ use App\Filament\Resources\Spreadsheets\Pages\ListSpreadsheets;
 use App\Filament\Resources\StructureAlerts\Pages\ListStructureAlerts;
 use App\Filament\Resources\SyncRuns\Pages\ListSyncRuns;
 use App\Google\Contracts\SheetsGateway;
+use App\Jobs\SyncSpreadsheetJob;
 use App\Models\CredentialAudit;
 use App\Models\GoogleSetting;
 use App\Models\ManagedTable;
@@ -26,6 +27,7 @@ use App\Models\Spreadsheet;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -216,4 +218,25 @@ it('saves a column under any name and with a type other than the recommended one
     expect($types['sold_on_text'])->toBe('varchar')->and($types['whole_price'])->toBe('bigint')
         ->and($row->sold_on_text)->toMatch('/^\d{4}-\d{2}-\d{2}$/')
         ->and(Mapping::query()->latest('id')->first()->columns()->pluck('target_type')->map->value->all())->toBe(['string', 'integer']);
+});
+
+it('shows a syncing state on the table page while a sync is queued, and polls until it is done', function () {
+    $sales = ManagedTable::query()->where('name', 'sales')->first();
+    $spreadsheet = Spreadsheet::query()->where('google_id', 'demo-shop-london')->first();
+    $page = fn () => Livewire::test(BrowseManagedTable::class, ['record' => $sales->getRouteKey()]);
+
+    Cache::put($spreadsheet->syncingCacheKey(), true, 60);
+    $page()->assertSee('Syncing the data from Google')->assertSeeHtml('wire:poll');
+
+    Cache::forget($spreadsheet->syncingCacheKey());
+    $page()->assertDontSee('Syncing the data from Google')->assertDontSeeHtml('wire:poll');
+});
+
+it('clears the syncing flag when the queued sync has run', function () {
+    $spreadsheet = Spreadsheet::query()->where('google_id', 'demo-shop-london')->first();
+
+    SyncSpreadsheetJob::start($spreadsheet);
+
+    expect($spreadsheet->isSyncing())->toBeFalse()
+        ->and($spreadsheet->syncRuns()->exists())->toBeTrue();
 });

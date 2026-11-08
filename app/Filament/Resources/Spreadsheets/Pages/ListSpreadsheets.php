@@ -39,7 +39,7 @@ class ListSpreadsheets extends ListRecords
                 ->color('gray')
                 ->action(function () {
                     $spreadsheets = Spreadsheet::query()->where('is_active', true)->get();
-                    $spreadsheets->each(fn (Spreadsheet $s) => SyncSpreadsheetJob::dispatch($s, TriggerType::Manual));
+                    $spreadsheets->each(fn (Spreadsheet $s) => SyncSpreadsheetJob::start($s, TriggerType::Manual));
 
                     Notification::make()->title('Sync started for '.$spreadsheets->count().' spreadsheet(s)')->success()->send();
                 }),

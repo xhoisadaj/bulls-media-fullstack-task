@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * A tracked Google spreadsheet ("file" in the plan).
@@ -44,5 +45,18 @@ class Spreadsheet extends Model
     public function url(): string
     {
         return 'https://docs.google.com/spreadsheets/d/'.$this->google_id.'/edit';
+    }
+
+    public function syncingCacheKey(): string
+    {
+        return 'spreadsheet-syncing-'.$this->id;
+    }
+
+    /**
+     * True while a queued sync of this spreadsheet hasn't finished yet.
+     */
+    public function isSyncing(): bool
+    {
+        return Cache::has($this->syncingCacheKey());
     }
 }
