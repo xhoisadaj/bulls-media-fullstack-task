@@ -120,7 +120,7 @@ class TableSetup
     /**
      * Columns of the table whose header row starts at the given 1-based position.
      *
-     * @return list<array{header: string, type: string, compare: bool, warning: ?string, sample: string}>
+     * @return list<array{header: string, type: string, compare: bool, warning: ?string, samples: list<string>}>
      *
      * @throws GoogleAccessException
      */
@@ -151,7 +151,7 @@ class TableSetup
                 'type' => $this->guesser->guess($raw, $formatted, $formulas)->value,
                 'compare' => ! $this->hasVolatileFormula($formulas),
                 'warning' => $this->warning($formatted, $formulas),
-                'sample' => implode(', ', array_slice(array_filter($formatted, fn ($v) => $v !== ''), 0, 3)),
+                'samples' => array_values(array_slice(array_filter($formatted, fn ($v) => trim($v) !== ''), 0, 3)),
             ];
         }
 

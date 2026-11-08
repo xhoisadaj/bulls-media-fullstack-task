@@ -5,6 +5,7 @@ namespace App\Filament\Resources\SourceTables\Schemas;
 use App\Enums\ApplyMode;
 use App\Enums\EndRule;
 use App\Enums\IdentityMode;
+use App\Google\Contracts\SheetsGateway;
 use App\Models\SourceTable;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
@@ -55,6 +56,12 @@ class SourceTableForm
                 ->label('How are rows recognised between syncs?')
                 ->options(IdentityMode::class)
                 ->default(IdentityMode::Content)
+                ->disableOptionWhen(fn (string $value, ?SourceTable $record): bool => $value === IdentityMode::SystemId->value
+                    && $record?->identity_mode !== IdentityMode::SystemId
+                    && ! app(SheetsGateway::class)->canWrite())
+                ->helperText(fn (): ?string => app(SheetsGateway::class)->canWrite()
+                    ? null
+                    : 'System ID needs Google connected with write access (Settings → Google connection → Connect with write access). With a read-only connection, pick Key columns or Content only.')
                 ->required()
                 ->live(),
             Select::make($keyField)

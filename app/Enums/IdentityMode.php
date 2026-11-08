@@ -27,7 +27,7 @@ enum IdentityMode: string implements HasDescription, HasLabel
     {
         return match ($this) {
             self::Key => 'One or more columns that are unique per row (order_id, email). Detects new, modified, removed and restored rows.',
-            self::SystemId => 'The app writes a _sync_id column into the sheet. Needs OAuth with write access. Detects modified rows on any sheet.',
+            self::SystemId => 'For sheets without a unique column: the app writes a short ID into a new _sync_id column of the sheet, so an edited row is still recognised. Needs Google connected with write access.',
             self::Content => 'The row\'s values are its identity. An edited row shows as removed + new, because nothing proves it is the same row.',
         };
     }

@@ -27,8 +27,10 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Components\Wizard\Step;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -124,10 +126,10 @@ class CreateSourceTable extends CreateRecord
                         ->schema([
                             TextInput::make('header')->disabled()->dehydrated()->columnSpan(3),
                             Select::make('type')->options(ColumnType::class)->required()->columnSpan(3),
-                            Toggle::make('compare')->label('Compare')->inline(false)->columnSpan(1)
-                                ->helperText('Off = stored, not used to detect changes'),
-                            Text::make(fn (Get $get) => trim(($get('sample') ? 'e.g. '.$get('sample') : '').($get('warning') ? ' ⚠ '.$get('warning') : '')))
-                                ->columnSpan(5),
+                            Toggle::make('compare')->label('Compare')->inline(false)->columnSpan(2)
+                                ->hintIcon(Heroicon::OutlinedInformationCircle, 'On: a change in this column marks the row as modified. Off: the value is stored but ignored when looking for changes.'),
+                            Text::make(fn (Get $get): HtmlString => self::sampleCells($get('samples') ?? [], $get('warning')))
+                                ->columnSpan(4),
                         ]),
                     ...SourceTableForm::identityFields(
                         fn (Get $get) => collect($get('columns') ?? [])->pluck('header', 'header')->all(),
@@ -258,6 +260,23 @@ class CreateSourceTable extends CreateRecord
         }
 
         return $descriptions;
+    }
+
+    /**
+     * The first values of a column as they appear in the sheet, plus any warning.
+     *
+     * @param  list<string>  $samples
+     */
+    private static function sampleCells(array $samples, ?string $warning): HtmlString
+    {
+        $cells = $samples === []
+            ? '<span class="ss-null">no values in the first rows</span>'
+            : implode('', array_map(fn (string $value) => '<span class="ss-chip ss-mono">'.e($value).'</span>', $samples));
+
+        return new HtmlString(
+            '<div class="ss"><p class="ss-muted">First values in the sheet</p><div class="ss-chips" style="margin-top:0.35rem">'.$cells.'</div>'
+            .($warning ? '<p class="ss-error" style="margin-top:0.5rem">⚠ '.e($warning).'</p>' : '').'</div>'
+        );
     }
 
     /**

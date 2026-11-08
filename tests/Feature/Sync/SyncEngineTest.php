@@ -338,6 +338,23 @@ it('holds new rows in system ID mode when the sheet cannot be written', function
         ->and(StructureAlert::query()->where('type', AlertType::SystemIdProblem)->value('message'))->toContain('waiting for write access');
 });
 
+it('fails a system ID table visibly when the sheet has no _sync_id column and cannot be written', function () {
+    $fixture = SyncFixture::make(
+        [['name', 'amount'], ['Xhoi', 20], ['Ana', 35]],
+        ['name' => ColumnType::String, 'amount' => ColumnType::Integer],
+        ['name' => 'name', 'amount' => 'amount'],
+        target: 'people',
+        mode: IdentityMode::SystemId,
+    );
+    $fixture->gateway->writable = false;
+
+    $run = syncNow($fixture);
+
+    expect($run->status)->toBe(SyncStatus::Failed)
+        ->and(collect($run->errors)->pluck('message')->implode(' '))->toContain('needs a _sync_id column')
+        ->and(DB::table('people')->count())->toBe(0);
+});
+
 it('fails one file cleanly without touching data when it becomes inaccessible', function () {
     $fixture = keyFixture([[1001, 'Shoes', 50, 2]]);
     syncNow($fixture);

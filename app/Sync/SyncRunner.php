@@ -253,7 +253,20 @@ class SyncRunner
                 $read = $this->reader->read($table, $values, $otherHeaders);
             }
 
+            if ($read->located->columnOf(SheetReader::SYSTEM_ID_HEADER) === null) {
+                $message = 'System ID mode needs a _sync_id column in the sheet, and it can\'t be added without Google write access. Reconnect with write access, or switch the table to Key columns or Content only.';
+                $table->markBroken($message);
+                $errors[] = ['table' => $table->name, 'message' => $message];
+
+                return [];
+            }
+
             $rows = $this->systemIds->assign($table, $read, $tabTitle);
+            $held = count($read->rows) - count($rows);
+
+            if ($held > 0) {
+                $errors[] = ['table' => $table->name, 'message' => $held.' row(s) have no _sync_id yet and were not synced: writing IDs needs Google write access.'];
+            }
         }
 
         $stored = $table->records()

@@ -95,3 +95,22 @@ it('shows a preview of the tab with the chosen table highlighted', function () {
         ->assertSeeHtml('data-option="r3c2"')
         ->assertSeeHtml('ss-grid-head');
 });
+
+it('shows the first values of each column and blocks system ID mode without write access', function () {
+    app(SheetsGateway::class)->writable = false;
+
+    $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['tab_id' => $this->tab->id]);
+    nextStep($wizard, 0);
+    $wizard->fillForm(['detected' => 'r3c2']);
+    nextStep($wizard, 1);
+
+    expect(collect($wizard->get('data.columns'))->pluck('samples', 'header')->all())
+        ->toBe(['order_id' => ['1001', '1002'], 'product_name' => ['Shoes', 'Bag'], 'price' => ['50', '35']]);
+
+    $wizard->assertSee('First values in the sheet')
+        ->fillForm(['identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review'])
+        ->call('create')
+        ->assertHasFormErrors(['identity_mode']);
+
+    expect(SourceTable::query()->count())->toBe(0);
+});
