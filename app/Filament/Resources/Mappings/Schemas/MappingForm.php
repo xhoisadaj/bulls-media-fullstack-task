@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Mappings\Schemas;
 
+use App\Enums\ColumnType;
+use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Models\ManagedTable;
 use App\Models\SourceColumn;
 use App\Models\SourceTable;
@@ -106,29 +108,56 @@ class MappingForm
                                 ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                                 ->live()
                                 ->afterStateUpdated(function ($state, Get $get, Set $set) {
-                                    if ($state && blank($get('target_column'))) {
-                                        $set('target_column', self::suggestTarget((string) SourceColumn::query()->find($state)?->header));
+                                    $column = SourceColumn::query()->find($state);
+
+                                    if ($column === null) {
+                                        return;
                                     }
+
+                                    if (blank($get('target_column'))) {
+                                        $set('target_column', app(SchemaManager::class)->suggestName($column->header));
+                                    }
+
+                                    $set('target_type', self::recommendedType(self::targetTable($get, '../../'), $get('target_column'), $column)?->value);
                                 })
-                                ->columnSpan(4),
-                            Select::make('target_column')
+                                ->columnSpan(3),
+                            TextInput::make('target_column')
                                 ->label('Database column')
-                                ->helperText(fn (Get $get): ?string => self::targetTable($get, '../../') === null ? null : 'Pick a column of the table, or type a name to add a new one.')
-                                ->options(fn (Get $get): array => self::targetOptions(self::targetTable($get, '../../'), $get('target_column')))
-                                ->searchable()
-                                ->getSearchResultsUsing(fn (string $search, Get $get): array => self::targetSearch(self::targetTable($get, '../../'), $search))
-                                ->getOptionLabelUsing(fn ($value, Get $get): string => self::targetLabel(self::targetTable($get, '../../'), (string) $value))
+                                ->placeholder('any name, e.g. product_name')
+                                ->datalist(fn (Get $get): array => array_keys(self::existingColumns(self::targetTable($get, '../../'))))
+                                ->helperText(fn (Get $get): ?string => self::targetTable($get, '../../') === null ? null : 'Type any name; the table\'s columns are suggested.')
                                 ->required()
                                 ->distinct()
-                                ->live()
+                                ->live(onBlur: true)
+                                ->afterStateUpdated(function ($state, Get $get, Set $set) {
+                                    $existing = self::existingType(self::targetTable($get, '../../'), $state);
+
+                                    if ($existing !== null) {
+                                        $set('target_type', app(SchemaManager::class)->columnTypeOf($existing)?->value);
+                                    }
+                                })
                                 ->rule(fn () => function (string $attribute, mixed $value, \Closure $fail) {
                                     if ($error = app(SchemaManager::class)->nameError((string) $value, 'Column')) {
                                         $fail($error);
                                     }
                                 })
-                                ->columnSpan(4),
-                            Text::make(fn (Get $get): HtmlString => self::typeNote(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column')))
-                                ->columnSpan(4),
+                                ->columnSpan(3),
+                            Select::make('target_type')
+                                ->label('Type')
+                                ->options(ColumnType::class)
+                                ->required()
+                                ->live()
+                                ->afterStateHydrated(function (Select $component, $state, Get $get): void {
+                                    if (blank($state) && ($column = SourceColumn::query()->find($get('source_column_id'))) !== null) {
+                                        $component->state(self::recommendedType(self::targetTable($get, '../../'), $get('target_column'), $column)?->value);
+                                    }
+                                })
+                                ->disabled(fn (Get $get): bool => self::existingType(self::targetTable($get, '../../'), $get('target_column')) !== null)
+                                ->dehydrated()
+                                ->helperText(fn (Get $get): ?string => self::typeHint(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column')))
+                                ->columnSpan(3),
+                            Text::make(fn (Get $get): HtmlString => self::typeNote(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column'), $get('target_type')))
+                                ->columnSpan(3),
                         ]),
                 ]),
         ]);
@@ -149,85 +178,62 @@ class MappingForm
     }
 
     /**
-     * The database name for a sheet header. It equals an existing column's name when the two match
-     * ("Product Name" → product_name), so matching columns are picked automatically.
+     * @return array<string, string> column name => MySQL type of the existing target table
      */
-    public static function suggestTarget(string $header): string
+    public static function existingColumns(?string $table): array
     {
-        return app(SchemaManager::class)->suggestName($header);
+        return $table === null ? [] : app(SchemaManager::class)->targetColumns($table);
+    }
+
+    public static function existingType(?string $table, mixed $column): ?string
+    {
+        return blank($column) ? null : (self::existingColumns($table)[(string) $column] ?? null);
     }
 
     /**
-     * @return array<string, string>
+     * The type to preselect: the existing column's type, else the sheet column's type.
      */
-    public static function targetOptions(?string $table, mixed $current): array
+    public static function recommendedType(?string $table, mixed $target, SourceColumn $column): ?ColumnType
     {
-        $options = [];
+        $existing = self::existingType($table, $target);
 
-        foreach ($table === null ? [] : app(SchemaManager::class)->targetColumns($table) as $column => $type) {
-            $options[$column] = $column.' · '.$type;
+        return $existing !== null ? app(SchemaManager::class)->columnTypeOf($existing) : $column->type;
+    }
+
+    public static function typeHint(?string $table, mixed $sourceColumnId, mixed $target): ?string
+    {
+        if (($existing = self::existingType($table, $target)) !== null) {
+            return 'Set by the existing column ('.$existing.').';
         }
 
-        if (filled($current) && ! isset($options[$current])) {
-            $options[(string) $current] = self::targetLabel($table, (string) $current);
-        }
+        $recommended = SourceColumn::query()->find($sourceColumnId)?->type;
 
-        return $options;
+        return $recommended === null ? null : 'Recommended: '.$recommended->getLabel();
     }
 
     /**
-     * Existing columns matching the search, plus the typed text as a new column.
-     *
-     * @return array<string, string>
+     * What happens to the values: a new column is added, and a warning when sheet values need converting.
      */
-    public static function targetSearch(?string $table, string $search): array
+    public static function typeNote(?string $table, mixed $sourceColumnId, mixed $target, mixed $chosen): HtmlString
     {
-        $manager = app(SchemaManager::class);
-        $results = [];
+        $sheetType = SourceColumn::query()->find($sourceColumnId)?->type;
+        $type = ColumnType::tryFrom(SourceTableForm::enumValue($chosen) ?? '');
 
-        foreach ($table === null ? [] : $manager->targetColumns($table) as $column => $type) {
-            if (str_contains($column, strtolower(trim($search)))) {
-                $results[$column] = $column.' · '.$type;
-            }
-        }
-
-        $new = $manager->suggestName($search);
-
-        if (trim($search) !== '' && ! isset($results[$new]) && $manager->nameError($new) === null && ! in_array($new, SchemaManager::SYSTEM_COLUMNS, true)) {
-            $results[$new] = '+ New column "'.$new.'"';
-        }
-
-        return $results;
-    }
-
-    public static function targetLabel(?string $table, string $value): string
-    {
-        $type = $table === null ? null : (app(SchemaManager::class)->targetColumns($table)[$value] ?? null);
-
-        return $type !== null ? $value.' · '.$type : $value.' · new column';
-    }
-
-    /**
-     * The sheet column's type, and a warning when it doesn't fit the chosen existing column.
-     */
-    public static function typeNote(?string $table, mixed $sourceColumnId, mixed $target): HtmlString
-    {
-        $type = SourceColumn::query()->find($sourceColumnId)?->type;
-
-        if ($type === null) {
+        if ($sheetType === null || blank($target)) {
             return new HtmlString('');
         }
 
-        $existing = $table === null || blank($target) ? null : (app(SchemaManager::class)->targetColumns($table)[$target] ?? null);
-        $note = '<span class="ss-muted">Sheet type: '.e($type->getLabel()).'</span>';
+        $notes = [];
 
-        if ($existing !== null && ! app(SchemaManager::class)->fits($existing, $type)) {
-            $note .= '<br><span class="ss-error">⚠ '.e($target).' is '.e($existing).': '.e($type->getLabel()).' values don\'t fit. Pick another column or a new one.</span>';
-        } elseif (filled($target) && $table !== null && $existing === null) {
-            $note .= '<br><span class="ss-muted">Will be added to '.e($table).'.</span>';
+        if ($table !== null && self::existingType($table, $target) === null) {
+            $notes[] = '<span class="ss-muted">New column, added to '.e($table).'.</span>';
         }
 
-        return new HtmlString('<div class="ss" style="padding-top:2rem">'.$note.'</div>');
+        if ($type !== null && $type !== $sheetType) {
+            $notes[] = '<span class="ss-error">⚠ The sheet column is '.e($sheetType->getLabel()).'. Values are converted to '.e($type->getLabel()).'; values that don\'t convert are saved empty.</span>';
+        }
+
+        return new HtmlString('<div class="ss" style="padding-top:2rem">'.implode('<br>', $notes).'</div>');
     }
 
     /**
@@ -292,7 +298,11 @@ class MappingForm
                 continue;
             }
 
-            $items[(string) Str::uuid()] = ['source_column_id' => $column->id, 'target_column' => $name];
+            $items[(string) Str::uuid()] = [
+                'source_column_id' => $column->id,
+                'target_column' => $name,
+                'target_type' => app(SchemaManager::class)->columnTypeOf($existing[$name])?->value,
+            ];
             $usedTargets[] = $name;
             $count++;
         }

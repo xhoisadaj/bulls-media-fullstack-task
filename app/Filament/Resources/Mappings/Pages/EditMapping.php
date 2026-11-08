@@ -6,6 +6,7 @@ use App\Filament\Resources\Mappings\MappingResource;
 use App\Google\Exceptions\GoogleAccessException;
 use App\Sync\SheetReader;
 use App\Sync\TabFetcher;
+use App\Sync\TargetWriter;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
@@ -70,7 +71,7 @@ class EditMapping extends EditRecord
         $rows = [];
 
         foreach (array_slice($read->rows, 0, 10) as $row) {
-            $rows[] = $mapping->columns->map(fn ($c) => $row->values[$c->source_column_id] ?? null)->all();
+            $rows[] = $mapping->columns->map(fn ($c) => app(TargetWriter::class)->convert($c, $row->values[$c->source_column_id] ?? null))->all();
         }
 
         return [

@@ -140,7 +140,7 @@ class SchemaManager
         $mapping->loadMissing('managedTable', 'columns.sourceColumn');
         $table = $mapping->managedTable->name;
 
-        $plan = $mapping->columns->map(fn ($c) => ['target' => $c->target_column, 'type' => $c->sourceColumn->type])->values()->all();
+        $plan = $mapping->columns->map(fn ($c) => ['target' => $c->target_column, 'type' => $c->targetType()])->values()->all();
 
         if ($errors = $this->validatePlan($table, $plan)) {
             throw new SchemaException($errors);
@@ -298,6 +298,20 @@ class SchemaManager
     public function fits(string $mysqlType, ColumnType $type): bool
     {
         return in_array(strtolower($mysqlType), self::COMPATIBLE[$type->value], true);
+    }
+
+    /**
+     * The column type that matches an existing MySQL column type (varchar → String, bigint → Integer, …).
+     */
+    public function columnTypeOf(string $mysqlType): ?ColumnType
+    {
+        foreach (self::COMPATIBLE as $type => $names) {
+            if ($type !== ColumnType::ImageUrl->value && in_array(strtolower($mysqlType), $names, true)) {
+                return ColumnType::from($type);
+            }
+        }
+
+        return null;
     }
 
     /**

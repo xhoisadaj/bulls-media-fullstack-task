@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Mappings\Pages;
 
 use App\Enums\ColumnType;
+use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Models\Mapping;
 use App\Models\SourceColumn;
 use App\Sync\Backfiller;
@@ -32,7 +33,8 @@ trait MappingSaving
             $source = SourceColumn::query()->find($column['source_column_id'] ?? null);
 
             if ($source !== null && filled($column['target_column'] ?? null)) {
-                $plan[] = ['target' => (string) $column['target_column'], 'type' => $source->type ?? ColumnType::String];
+                $type = ColumnType::tryFrom(SourceTableForm::enumValue($column['target_type'] ?? null) ?? '') ?? $source->type ?? ColumnType::String;
+                $plan[] = ['target' => (string) $column['target_column'], 'type' => $type];
             }
         }
 

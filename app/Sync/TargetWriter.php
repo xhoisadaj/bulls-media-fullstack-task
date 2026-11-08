@@ -4,6 +4,7 @@ namespace App\Sync;
 
 use App\Enums\ColumnType;
 use App\Models\Mapping;
+use App\Models\MappingColumn;
 use App\Models\SourceRecord;
 use App\Models\SourceTable;
 use Illuminate\Support\Collection;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\DB;
  */
 class TargetWriter
 {
+    public function __construct(private readonly ValueNormalizer $normalizer) {}
+
     public function upsertRecord(SourceRecord $record): void
     {
         foreach ($this->mappings($record->source_table_id) as $mapping) {
@@ -64,7 +67,7 @@ class TargetWriter
 
         foreach ($mapping->columns as $column) {
             $value = $record->data[(string) $column->source_column_id] ?? null;
-            $payload[$column->target_column] = $this->databaseValue($column->sourceColumn->type, $value);
+            $payload[$column->target_column] = $this->convert($column, $value);
         }
 
         return $payload + [
@@ -72,6 +75,23 @@ class TargetWriter
             '_synced_at' => now(),
             '_removed_at' => $record->removed_at,
         ];
+    }
+
+    /**
+     * The stored (normalized) sheet value as the mapping column's database type. When the mapping
+     * chose another type than the sheet column's, the value is converted; a value that doesn't
+     * convert is saved empty (the original stays in the source record).
+     */
+    public function convert(MappingColumn $column, mixed $value): mixed
+    {
+        $type = $column->targetType();
+
+        if ($value !== null && $type !== $column->sourceColumn->type) {
+            $converted = $this->normalizer->normalize($type, (string) $value, (string) $value);
+            $value = $converted->ok ? $converted->value : null;
+        }
+
+        return $this->databaseValue($type, $value);
     }
 
     private function databaseValue(ColumnType $type, mixed $value): mixed

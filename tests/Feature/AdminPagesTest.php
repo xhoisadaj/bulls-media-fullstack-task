@@ -26,6 +26,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -146,9 +147,12 @@ it('maps a second file into an existing table by picking its columns', function 
     $targets = collect($matched['columns'])->pluck('target_column')->all();
 
     expect($matched['count'])->toBe(2)->and($targets)->toBe(['amount', 'order_id'])
-        ->and(MappingForm::targetOptions('sales', null))->toHaveKeys(['order_id', 'order_date', 'name', 'product_price', 'amount'])
-        ->and(MappingForm::targetSearch('sales', 'Product'))->toBe(['product_price' => 'product_price · decimal', 'product' => '+ New column "product"'])
-        ->and((string) MappingForm::typeNote('sales', $returns->columns()->where('header', 'reason')->value('id'), 'amount'))->toContain("values don't fit")
+        ->and(collect($matched['columns'])->pluck('target_type')->all())->toBe(['integer', 'integer'])
+        ->and(array_keys(MappingForm::existingColumns('sales')))->toEqualCanonicalizing(['order_id', 'order_date', 'name', 'product_price', 'amount'])
+        ->and(MappingForm::typeHint('sales', $returns->columns()->where('header', 'reason')->value('id'), 'my_reason'))->toBe('Recommended: String (up to 255 chars)')
+        ->and(MappingForm::typeHint('sales', $returns->columns()->where('header', 'reason')->value('id'), 'amount'))->toBe('Set by the existing column (bigint).')
+        ->and((string) MappingForm::typeNote('sales', $returns->columns()->where('header', 'return_date')->value('id'), 'returned_on', 'string'))
+        ->toContain('New column, added to sales')->toContain('Values are converted to String')
         ->and((string) MappingForm::overview('sales', $paris->id, $matched['columns']))
         ->toContain('← amount')->toContain('not filled by this file');
 
@@ -164,4 +168,28 @@ it('filters a target table by the file its rows came from', function () {
     Livewire::test(BrowseManagedTable::class, ['record' => ManagedTable::query()->where('name', 'sales')->first()->getRouteKey()])
         ->filterTable('source', $london->id)
         ->assertCountTableRecords(DB::table('sales')->where('_source_table_id', $london->id)->whereNull('_removed_at')->count());
+});
+
+it('saves a column under any name and with a type other than the recommended one', function () {
+    $london = SourceTable::query()->where('name', 'London orders')->first();
+
+    Livewire::test(CreateMapping::class)
+        ->fillForm([
+            'source_table_id' => $london->id,
+            'target_mode' => 'new',
+            'new_table_name' => 'order_texts',
+            'columns' => [
+                ['source_column_id' => $london->columns()->where('header', 'date')->value('id'), 'target_column' => 'sold_on_text', 'target_type' => 'string'],
+                ['source_column_id' => $london->columns()->where('header', 'price')->value('id'), 'target_column' => 'whole_price', 'target_type' => 'integer'],
+            ],
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $types = collect(Schema::getColumns('order_texts'))->pluck('type_name', 'name');
+    $row = DB::table('order_texts')->orderBy('_record_id')->first();
+
+    expect($types['sold_on_text'])->toBe('varchar')->and($types['whole_price'])->toBe('bigint')
+        ->and($row->sold_on_text)->toMatch('/^\d{4}-\d{2}-\d{2}$/')
+        ->and(Mapping::query()->latest('id')->first()->columns()->pluck('target_type')->map->value->all())->toBe(['string', 'integer']);
 });
