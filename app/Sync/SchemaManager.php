@@ -22,6 +22,9 @@ class SchemaManager
 {
     public const NAME_PATTERN = '/^[a-z][a-z0-9_]{0,63}$/';
 
+    /** Decimal columns store 2 decimal places (1000.00), like prices and amounts in a sheet. */
+    public const DECIMAL_PLACES = 2;
+
     /** The one column every managed table has: our row ID (R-101). Mappings can't use this name. */
     public const SYSTEM_COLUMNS = ['id'];
 
@@ -371,7 +374,7 @@ class SchemaManager
             ColumnType::String => $blueprint->string($name)->nullable(),
             ColumnType::Text, ColumnType::ImageUrl => $blueprint->text($name)->nullable(),
             ColumnType::Integer => $blueprint->bigInteger($name)->nullable(),
-            ColumnType::Decimal => $blueprint->decimal($name, 20, ValueNormalizer::DECIMAL_SCALE)->nullable(),
+            ColumnType::Decimal => $blueprint->decimal($name, 15, self::DECIMAL_PLACES)->nullable(),
             ColumnType::Date => $blueprint->date($name)->nullable(),
             ColumnType::DateTime => $blueprint->dateTime($name)->nullable(),
             ColumnType::Boolean => $blueprint->boolean($name)->nullable(),

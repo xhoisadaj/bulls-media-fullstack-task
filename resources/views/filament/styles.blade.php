@@ -48,4 +48,14 @@
     .dark .ss-grid td.ss-grid-in { background: rgb(16 185 129 / 0.12); }
     .dark .ss-grid td.ss-grid-header { background: rgb(16 185 129 / 0.3); }
     .dark .ss-grid td.ss-grid-head { outline-color: rgb(52 211 153); }
+
+    /* Attention banner at the top of every page: open alerts and changes waiting for review */
+    .ss-banner { margin-bottom: 1rem; border: 1px solid rgb(245 158 11 / 0.5); background: rgb(254 243 199 / 0.6); border-radius: 0.75rem; padding: 0.75rem 1rem; }
+    .dark .ss-banner { background: rgb(245 158 11 / 0.12); border-color: rgb(245 158 11 / 0.4); }
+    .ss-banner-row { display: flex; align-items: flex-start; gap: 0.75rem; }
+    .ss-banner-row + .ss-banner-row { margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid rgb(245 158 11 / 0.3); }
+    .ss-banner-row > div, .ss-banner-row > p { flex: 1; }
+    .ss-banner-icon { color: rgb(217 119 6); font-weight: 700; }
+    .ss-banner-link { white-space: nowrap; font-weight: 600; color: rgb(180 83 9); }
+    .dark .ss-banner-link { color: rgb(251 191 36); }
 </style>

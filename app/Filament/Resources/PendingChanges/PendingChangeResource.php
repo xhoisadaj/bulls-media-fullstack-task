@@ -76,7 +76,6 @@ class PendingChangeResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('status')->options(ChangeStatus::class)->default(ChangeStatus::Pending->value),
                 SelectFilter::make('type')->options(ChangeType::class),
                 SelectFilter::make('source_table_id')->label('Table')
                     ->options(fn () => SourceTable::query()->with('tab.spreadsheet')->get()->mapWithKeys(fn (SourceTable $t) => [$t->id => $t->label()])),

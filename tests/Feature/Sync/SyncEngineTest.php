@@ -54,8 +54,8 @@ it('creates the target table with renamed columns and syncs rows (requirement #5
     expect($run->status)->toBe(SyncStatus::Success)
         ->and(DB::table('sales')->orderBy('order_id')->get(['order_id', 'name', 'product_price', 'amount'])->map(fn ($r) => (array) $r)->all())
         ->toBe([
-            ['order_id' => 1001, 'name' => 'Shoes', 'product_price' => '50.000000', 'amount' => 2],
-            ['order_id' => 1002, 'name' => 'Bag', 'product_price' => '35.000000', 'amount' => 1],
+            ['order_id' => 1001, 'name' => 'Shoes', 'product_price' => '50.00', 'amount' => 2],
+            ['order_id' => 1002, 'name' => 'Bag', 'product_price' => '35.00', 'amount' => 1],
         ])
         ->and(SchemaHistory::query()->where('action', 'add_column')->count())->toBe(4);
 });
@@ -83,7 +83,7 @@ it('ignores re-sorted rows and detects a modification by key', function () {
     expect($run->counts)->toMatchArray(['unchanged' => 1, 'modified' => 1, 'new' => 1])
         ->and($modified->status)->toBe(ChangeStatus::Approved)
         ->and($modified->changed_columns)->toBe([(string) $fixture->column('price')->id])
-        ->and(DB::table('sales')->where('order_id', 1002)->value('product_price'))->toBe('40.000000');
+        ->and(DB::table('sales')->where('order_id', 1002)->value('product_price'))->toBe('40.00');
 });
 
 it('shows an edit as removed + new in content mode, and keeps removals pending even in auto mode', function () {
@@ -117,7 +117,7 @@ it('imports the first sync right away in review mode, then queues changes until 
 
     expect(PendingChange::query()->pending()->count())->toBe(2)
         ->and(DB::table('sales')->count())->toBe(1)
-        ->and(DB::table('sales')->value('product_price'))->toBe('50.000000');
+        ->and(DB::table('sales')->value('product_price'))->toBe('50.00');
 
     app(ChangeApplier::class)->approve(PendingChange::query()->pending()->where('type', 'new')->sole(), User::factory()->create());
 
@@ -220,7 +220,7 @@ it('marks the table broken when a mapped column is deleted, leaving data untouch
     expect($run->status)->toBe(SyncStatus::Failed)
         ->and($fixture->table->refresh()->status)->toBe(SourceTableStatus::Broken)
         ->and(StructureAlert::query()->where('type', AlertType::ColumnMissing)->exists())->toBeTrue()
-        ->and(DB::table('sales')->value('product_price'))->toBe('50.000000');
+        ->and(DB::table('sales')->value('product_price'))->toBe('50.00');
 });
 
 it('alerts about a new sheet column without changing anything, then fills it once mapped (requirement #6)', function () {

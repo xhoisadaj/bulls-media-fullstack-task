@@ -60,7 +60,6 @@ class StructureAlertResource extends Resource
                 TextColumn::make('updated_at')->label('Last seen')->since()->sortable(),
             ])
             ->filters([
-                SelectFilter::make('status')->options(AlertStatus::class)->default(AlertStatus::Open->value),
                 SelectFilter::make('type')->options(AlertType::class),
             ])
             ->recordActions([
@@ -77,20 +76,18 @@ class StructureAlertResource extends Resource
                     ->visible(fn (StructureAlert $record) => $record->source_table_id !== null)
                     ->url(fn (StructureAlert $record) => SourceTableResource::getUrl('edit', ['record' => $record->source_table_id])),
                 Action::make('resolve')
+                    ->label('Mark as handled')
                     ->icon(Heroicon::OutlinedCheck)
                     ->color('success')
+                    ->tooltip('Moves the alert to "Handled". It does not change any data. If the problem is still there at the next sync, a new alert appears. Alerts also close by themselves when the problem is fixed.')
                     ->visible(fn (StructureAlert $record) => $record->status === AlertStatus::Open)
                     ->action(fn (StructureAlert $record) => $record->update(['status' => AlertStatus::Resolved, 'resolved_at' => now()])),
-                Action::make('dismiss')
-                    ->color('gray')
-                    ->visible(fn (StructureAlert $record) => $record->status === AlertStatus::Open)
-                    ->action(fn (StructureAlert $record) => $record->update(['status' => AlertStatus::Dismissed, 'resolved_at' => now()])),
             ])
             ->toolbarActions([
                 BulkAction::make('dismissSelected')
-                    ->label('Dismiss selected')
+                    ->label('Mark selected as handled')
                     ->deselectRecordsAfterCompletion()
-                    ->action(fn (Collection $records) => $records->each->update(['status' => AlertStatus::Dismissed, 'resolved_at' => now()])),
+                    ->action(fn (Collection $records) => $records->each->update(['status' => AlertStatus::Resolved, 'resolved_at' => now()])),
             ])
             ->emptyStateHeading('No open alerts')
             ->emptyStateDescription('New columns, missing columns, tables that moved or vanished, and access problems show up here.');

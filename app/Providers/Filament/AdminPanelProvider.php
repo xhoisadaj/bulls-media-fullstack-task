@@ -40,6 +40,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Settings'),
             ])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => view('filament.styles'))
+            ->renderHook(PanelsRenderHook::PAGE_START, fn () => view('filament.attention-banner'))
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AlertType;
 use App\Filament\Pages\GoogleConnection;
 use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Filament\Resources\ManagedTables\Pages\BrowseManagedTable;
@@ -26,6 +27,7 @@ use App\Models\Mapping;
 use App\Models\PendingChange;
 use App\Models\SourceTable;
 use App\Models\Spreadsheet;
+use App\Models\StructureAlert;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Artisan;
@@ -300,4 +302,21 @@ it('sets Compare per column on the mapping page, also for saved rows', function 
 
     expect($amount->refresh()->compare)->toBeFalse()
         ->and($london->trackedColumns()->pluck('header')->all())->not->toContain('amount');
+});
+
+it('shows open alerts and changes waiting for review in a banner on other pages', function () {
+    $table = SourceTable::query()->first();
+    StructureAlert::raise(AlertType::ColumnAdded, 'New column "discount" found in Shop London.', $table);
+    Artisan::call('sheets:demo-change', ['scenario' => 'delete']);
+    app()->forgetScopedInstances();
+    app()->forgetInstance(SheetsGateway::class);
+    Artisan::call('sheets:sync', ['--now' => true]);
+
+    $this->get('/admin/spreadsheets')->assertOk()
+        ->assertSee('your attention')
+        ->assertSee('New column &quot;discount&quot; found in Shop London.', escape: false)
+        ->assertSee('waits for your review');
+
+    $this->get('/admin/structure-alerts')->assertOk()->assertDontSee('your attention')->assertSee('Needs attention');
+    $this->get('/admin/pending-changes')->assertOk()->assertDontSee('waits for your review')->assertSee('Waiting for review');
 });
