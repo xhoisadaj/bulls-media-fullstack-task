@@ -7,6 +7,7 @@ use App\Filament\Resources\SyncSchedules\SyncScheduleResource;
 use App\Jobs\SyncSpreadsheetJob;
 use App\Models\Spreadsheet;
 use App\Models\SyncSchedule;
+use App\Support\Access;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\Select;
@@ -43,8 +44,10 @@ class ManageSyncSchedules extends ManageRecords
         return Action::make('syncAllFiles')
             ->label('Sync all files')
             ->icon(Heroicon::OutlinedArrowPath)
+            ->visible(fn (): bool => Access::canEdit())
+            ->authorize(fn (): bool => Access::canEdit())
             ->action(function () {
-                $spreadsheets = Spreadsheet::query()->where('is_active', true)->get();
+                $spreadsheets = Access::spreadsheets()->where('is_active', true)->get();
                 $spreadsheets->each(fn (Spreadsheet $s) => SyncSpreadsheetJob::start($s, TriggerType::Manual));
 
                 Notification::make()

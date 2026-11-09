@@ -8,6 +8,8 @@ use App\Filament\Resources\ManagedTables\Pages\ListManagedTables;
 use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Filament\Support\ExportActions;
 use App\Models\ManagedTable;
+use App\Models\SourceRecord;
+use App\Support\Access;
 use App\Sync\SchemaException;
 use App\Sync\SchemaManager;
 use BackedEnum;
@@ -22,6 +24,7 @@ use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -50,9 +53,12 @@ class ManagedTableResource extends Resource
             ->columns([
                 TextColumn::make('name')->weight('semibold')->fontFamily('mono'),
                 TextColumn::make('rows')->label('Rows')
-                    ->state(fn (ManagedTable $record) => Schema::hasTable($record->name) ? DB::table($record->name)->count() : 'not created'),
+                    ->state(fn (ManagedTable $record) => ! Schema::hasTable($record->name) ? 'not created' : (Access::isAdmin()
+                        ? DB::table($record->name)->count()
+                        : DB::table($record->name)->whereIn('id', SourceRecord::codesFor(Access::sourceTableIds()))->count())),
                 TextColumn::make('mappings_count')->counts('mappings')->label('Mappings'),
-                TextColumn::make('can_delete')->label('Delete')
+                TextColumn::make('can_delete')
+                    ->visible(fn (): bool => Access::isAdmin())->label('Delete')
                     ->state(fn (ManagedTable $record): string => app(SchemaManager::class)->dropTableProblems($record) === [] ? 'Empty, can be deleted' : 'In use')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'In use' ? 'gray' : 'warning')
@@ -66,7 +72,7 @@ class ManagedTableResource extends Resource
                     ->icon(Heroicon::OutlinedTableCells)
                     ->url(fn (ManagedTable $record) => self::getUrl('browse', ['record' => $record])),
                 ExportActions::group(
-                    fn (ManagedTable $record) => [$record, null],
+                    fn (ManagedTable $record) => [$record, Access::sourceTableIds()],
                     fn (ManagedTable $record): bool => Schema::hasTable($record->name),
                 ),
                 Action::make('history')
@@ -80,10 +86,11 @@ class ManagedTableResource extends Resource
                     self::addColumnAction(),
                     self::removeColumnsAction(),
                     self::deleteTableAction(),
-                ]),
+                ])->visible(fn (): bool => Access::isAdmin()),
             ])
             ->toolbarActions([
                 BulkAction::make('deleteEmptyTables')
+                    ->authorize(fn (): bool => Access::isAdmin())
                     ->label('Delete selected empty tables')
                     ->icon(Heroicon::OutlinedTrash)
                     ->color('danger')
@@ -103,6 +110,7 @@ class ManagedTableResource extends Resource
     private static function addColumnAction(): Action
     {
         return Action::make('addColumn')
+            ->authorize(fn (): bool => Access::isAdmin())
             ->label('Add column')
             ->icon(Heroicon::OutlinedPlusCircle)
             ->visible(fn (ManagedTable $record): bool => Schema::hasTable($record->name))
@@ -131,6 +139,7 @@ class ManagedTableResource extends Resource
     private static function removeColumnsAction(): Action
     {
         return Action::make('removeColumns')
+            ->authorize(fn (): bool => Access::isAdmin())
             ->label('Remove columns')
             ->icon(Heroicon::OutlinedMinusCircle)
             ->color('danger')
@@ -165,6 +174,7 @@ class ManagedTableResource extends Resource
     private static function deleteTableAction(): Action
     {
         return Action::make('deleteTable')
+            ->authorize(fn (): bool => Access::isAdmin())
             ->label('Delete table')
             ->icon(Heroicon::OutlinedTrash)
             ->color('danger')
@@ -225,5 +235,13 @@ class ManagedTableResource extends Resource
     public static function canCreate(): bool
     {
         return false;
+    }
+
+    /**
+     * Only what belongs to the signed-in user's spreadsheets (admins see everything).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return Access::whereManagedTable(parent::getEloquentQuery());
     }
 }

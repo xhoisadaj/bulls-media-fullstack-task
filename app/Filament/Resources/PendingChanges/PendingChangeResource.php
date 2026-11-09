@@ -8,6 +8,7 @@ use App\Filament\Resources\PendingChanges\Pages\ListPendingChanges;
 use App\Models\PendingChange;
 use App\Models\SourceRecord;
 use App\Models\SourceTable;
+use App\Support\Access;
 use App\Sync\ChangeApplier;
 use App\Sync\RecordMatcher;
 use BackedEnum;
@@ -21,6 +22,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use UnitEnum;
 
@@ -45,7 +47,7 @@ class PendingChangeResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = PendingChange::query()->pending()->count();
+        $count = static::getEloquentQuery()->pending()->count();
 
         return $count > 0 ? (string) $count : null;
     }
@@ -91,11 +93,13 @@ class PendingChangeResource extends Resource
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
                 Action::make('approve')
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->icon(Heroicon::OutlinedCheck)
                     ->color('success')
                     ->visible(fn (PendingChange $record) => $record->status === ChangeStatus::Pending)
                     ->action(fn (PendingChange $record) => self::decide(collect([$record]), approve: true)),
                 Action::make('reject')
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->icon(Heroicon::OutlinedXMark)
                     ->color('danger')
                     ->visible(fn (PendingChange $record) => $record->status === ChangeStatus::Pending)
@@ -109,12 +113,14 @@ class PendingChangeResource extends Resource
             ])
             ->toolbarActions([
                 BulkAction::make('approveSelected')
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->label('Approve selected')
                     ->icon(Heroicon::OutlinedCheck)
                     ->color('success')
                     ->deselectRecordsAfterCompletion()
                     ->action(fn (Collection $records) => self::decide($records, approve: true)),
                 BulkAction::make('rejectSelected')
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->label('Reject selected')
                     ->icon(Heroicon::OutlinedXMark)
                     ->color('danger')
@@ -156,5 +162,13 @@ class PendingChangeResource extends Resource
     public static function canCreate(): bool
     {
         return false;
+    }
+
+    /**
+     * Only what belongs to the signed-in user's spreadsheets (admins see everything).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return Access::whereSourceTable(parent::getEloquentQuery());
     }
 }

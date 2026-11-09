@@ -165,6 +165,18 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 5. **Sync now** / **Sync all files**, or let a **sync schedule** run it (Activity → Sync schedules: several times a day, chosen weekdays, in your timezone; your timezone is set with "Your timezone" and all dates in the app are shown in it). The **first sync of a table imports all its rows right away** (there is nothing to compare with yet); from the next sync on, **Review → Review inbox** shows changes with field diffs, which you approve or reject. **Review → Alerts** shows new or missing columns (with "Map this column"), moved headers, blocked mass removals, access problems and fallback use.
 6. **Activity:** sync history (counts, skipped rows, the credential used), target tables with a data browser (filter by the file rows came from), schema history, removal of empty columns and tables, and **Export** of a table's data to **Excel, CSV or JSON** (all rows, or one file's rows via the "From file" filter; also `php artisan sheets:export sales --format=csv`).
 
+### Users and roles
+
+**Settings → Users** (admins): add users with a role and the spreadsheets they can access.
+
+| Role | Can do |
+|---|---|
+| **Admin** | everything: users, Google connection, sync schedules, all files, changing and deleting database tables |
+| **Editor** | on the spreadsheets shared with them: add sheet tables, map columns, sync, approve or reject changes, export |
+| **Viewer** | look at the data of the spreadsheets shared with them, and export it |
+
+Everything follows the shared files: other files, their changes, alerts and sync history are not visible, and in a database table shared by several files (e.g. `sales`) a user only sees and exports the rows of their files. Notifications go to admins and to the users a file is shared with. There is one Google connection (set by an admin); see [DECISIONS.md §11](docs/DECISIONS.md) for why users don't connect their own Google accounts.
+
 ## Demo scenarios
 
 `php artisan sheets:demo` loads three spreadsheets, stored as JSON in `storage/app/demo`:

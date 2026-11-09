@@ -4,7 +4,7 @@ namespace App\Filament\Resources\PendingChanges\Pages;
 
 use App\Enums\ChangeStatus;
 use App\Filament\Resources\PendingChanges\PendingChangeResource;
-use App\Models\PendingChange;
+use App\Support\Access;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -23,9 +23,9 @@ class ListPendingChanges extends ListRecords
                 ->icon(Heroicon::OutlinedCheckBadge)
                 ->color('success')
                 ->requiresConfirmation()
-                ->modalDescription(fn () => PendingChange::query()->pending()->count().' pending change(s) will be written to the database, including removals.')
-                ->visible(fn () => PendingChange::query()->pending()->exists())
-                ->action(fn () => PendingChangeResource::decide(PendingChange::query()->pending()->orderBy('id')->get(), approve: true)),
+                ->modalDescription(fn () => PendingChangeResource::getEloquentQuery()->pending()->count().' pending change(s) will be written to the database, including removals.')
+                ->visible(fn () => Access::canEdit() && PendingChangeResource::getEloquentQuery()->pending()->exists())
+                ->action(fn () => PendingChangeResource::decide(PendingChangeResource::getEloquentQuery()->pending()->orderBy('id')->get(), approve: true)),
         ];
     }
 
@@ -38,7 +38,7 @@ class ListPendingChanges extends ListRecords
     {
         return [
             'pending' => Tab::make('Waiting for review')
-                ->badge(fn () => PendingChange::query()->pending()->count() ?: null)
+                ->badge(fn () => PendingChangeResource::getEloquentQuery()->pending()->count() ?: null)
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', ChangeStatus::Pending)),
             'approved' => Tab::make('Approved')->modifyQueryUsing(fn (Builder $query) => $query->where('status', ChangeStatus::Approved)),
             'rejected' => Tab::make('Rejected')->modifyQueryUsing(fn (Builder $query) => $query->where('status', ChangeStatus::Rejected)),

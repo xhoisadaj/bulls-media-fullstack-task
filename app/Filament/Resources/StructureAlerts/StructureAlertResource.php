@@ -8,6 +8,7 @@ use App\Filament\Resources\Mappings\MappingResource;
 use App\Filament\Resources\SourceTables\SourceTableResource;
 use App\Filament\Resources\StructureAlerts\Pages\ListStructureAlerts;
 use App\Models\StructureAlert;
+use App\Support\Access;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -16,6 +17,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use UnitEnum;
 
@@ -39,7 +41,7 @@ class StructureAlertResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = StructureAlert::query()->open()->count();
+        $count = static::getEloquentQuery()->open()->count();
 
         return $count > 0 ? (string) $count : null;
     }
@@ -64,6 +66,7 @@ class StructureAlertResource extends Resource
             ])
             ->recordActions([
                 Action::make('mapColumn')
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->label('Map this column')
                     ->icon(Heroicon::OutlinedArrowsRightLeft)
                     ->visible(fn (StructureAlert $record) => $record->type === AlertType::ColumnAdded && $record->source_table_id && $record->status === AlertStatus::Open)
@@ -76,6 +79,7 @@ class StructureAlertResource extends Resource
                     ->visible(fn (StructureAlert $record) => $record->source_table_id !== null)
                     ->url(fn (StructureAlert $record) => SourceTableResource::getUrl('edit', ['record' => $record->source_table_id])),
                 Action::make('resolve')
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->label('Mark as handled')
                     ->icon(Heroicon::OutlinedCheck)
                     ->color('success')
@@ -85,6 +89,7 @@ class StructureAlertResource extends Resource
             ])
             ->toolbarActions([
                 BulkAction::make('dismissSelected')
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->label('Mark selected as handled')
                     ->deselectRecordsAfterCompletion()
                     ->action(fn (Collection $records) => $records->each->update(['status' => AlertStatus::Resolved, 'resolved_at' => now()])),
@@ -101,5 +106,13 @@ class StructureAlertResource extends Resource
     public static function canCreate(): bool
     {
         return false;
+    }
+
+    /**
+     * Only what belongs to the signed-in user's spreadsheets (admins see everything).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return Access::whereSpreadsheet(parent::getEloquentQuery());
     }
 }

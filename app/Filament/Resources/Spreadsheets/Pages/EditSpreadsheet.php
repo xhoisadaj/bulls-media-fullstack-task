@@ -6,6 +6,7 @@ use App\Filament\Resources\Spreadsheets\SpreadsheetResource;
 use App\Filament\Support\SyncActions;
 use App\Google\Exceptions\GoogleAccessException;
 use App\Google\SpreadsheetImporter;
+use App\Support\Access;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
@@ -23,6 +24,8 @@ class EditSpreadsheet extends EditRecord
             SyncActions::syncNow(),
             Action::make('refreshTabs')
                 ->label('Refresh tabs')
+                ->visible(fn (): bool => Access::canEdit())
+                ->authorize(fn (): bool => Access::canEdit())
                 ->icon(Heroicon::OutlinedArrowPathRoundedSquare)
                 ->color('gray')
                 ->action(function () {

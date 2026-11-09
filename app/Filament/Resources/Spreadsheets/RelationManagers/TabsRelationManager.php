@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Spreadsheets\RelationManagers;
 
 use App\Filament\Resources\SourceTables\SourceTableResource;
 use App\Models\Tab;
+use App\Support\Access;
 use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Icons\Heroicon;
@@ -25,13 +26,14 @@ class TabsRelationManager extends RelationManager
             ->description('Enable the tabs to sync, then set up the table(s) inside each tab.')
             ->columns([
                 TextColumn::make('name')->weight('semibold'),
-                ToggleColumn::make('is_active')->label('Sync this tab'),
+                ToggleColumn::make('is_active')->label('Sync this tab')->disabled(fn (): bool => ! Access::canEdit()),
                 IconColumn::make('is_present')->label('In sheet')->boolean(),
                 TextColumn::make('source_tables_count')->counts('sourceTables')->label('Tables'),
                 TextColumn::make('google_tab_id')->label('Tab ID')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([
                 Action::make('setUpTable')
+                    ->visible(fn (): bool => Access::canEdit())
                     ->label('Add a sheet table')
                     ->icon(Heroicon::OutlinedPlusCircle)
                     ->visible(fn (Tab $record) => $record->is_present)

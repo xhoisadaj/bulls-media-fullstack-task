@@ -9,11 +9,13 @@ use App\Filament\Resources\SourceTables\RelationManagers\ColumnsRelationManager;
 use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Filament\Resources\SourceTables\Tables\SourceTablesTable;
 use App\Models\SourceTable;
+use App\Support\Access;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class SourceTableResource extends Resource
@@ -54,5 +56,13 @@ class SourceTableResource extends Resource
             'create' => CreateSourceTable::route('/create'),
             'edit' => EditSourceTable::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Only what belongs to the signed-in user's spreadsheets (admins see everything).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return Access::whereSourceTable(parent::getEloquentQuery(), 'id');
     }
 }

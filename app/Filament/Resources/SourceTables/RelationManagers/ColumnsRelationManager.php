@@ -4,6 +4,7 @@ namespace App\Filament\Resources\SourceTables\RelationManagers;
 
 use App\Enums\ColumnType;
 use App\Models\SourceColumn;
+use App\Support\Access;
 use App\Sync\Backfiller;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -57,6 +58,8 @@ class ColumnsRelationManager extends RelationManager
             ])
             ->recordActions([
                 EditAction::make()
+                    ->visible(fn (): bool => Access::canEdit())
+                    ->authorize(fn (): bool => Access::canEdit())
                     ->before(function (SourceColumn $record) {
                         $this->trackedBefore = $record->sourceTable->trackedColumns()->pluck('id')->all();
                     })

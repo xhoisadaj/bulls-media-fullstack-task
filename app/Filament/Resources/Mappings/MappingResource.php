@@ -8,11 +8,13 @@ use App\Filament\Resources\Mappings\Pages\ListMappings;
 use App\Filament\Resources\Mappings\Schemas\MappingForm;
 use App\Filament\Resources\Mappings\Tables\MappingsTable;
 use App\Models\Mapping;
+use App\Support\Access;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class MappingResource extends Resource
@@ -44,5 +46,13 @@ class MappingResource extends Resource
             'create' => CreateMapping::route('/create'),
             'edit' => EditMapping::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Only what belongs to the signed-in user's spreadsheets (admins see everything).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return Access::whereSourceTable(parent::getEloquentQuery());
     }
 }

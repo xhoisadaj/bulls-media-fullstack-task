@@ -26,8 +26,10 @@ class TableExporter
 
     /**
      * Writes the export to a temporary file and returns its path. The caller deletes it after sending.
+     *
+     * @param  int|list<int>|null  $sourceTableIds  only the rows of these sheet tables (null = all rows)
      */
-    public function export(ManagedTable $table, string $format, ?int $sourceTableId = null): string
+    public function export(ManagedTable $table, string $format, int|array|null $sourceTableIds = null): string
     {
         if (! isset(self::FORMATS[$format])) {
             throw new InvalidArgumentException('Unknown export format "'.$format.'".');
@@ -40,8 +42,8 @@ class TableExporter
         $path = $directory.'/'.$this->fileName($table, $format);
 
         match ($format) {
-            'json' => $this->writeJson($path, $table, $columns, $types, $sourceTableId),
-            default => $this->writeSheet($format === 'csv' ? new CsvWriter : new XlsxWriter, $path, $table, $columns, $types, $sourceTableId),
+            'json' => $this->writeJson($path, $table, $columns, $types, $sourceTableIds),
+            default => $this->writeSheet($format === 'csv' ? new CsvWriter : new XlsxWriter, $path, $table, $columns, $types, $sourceTableIds),
         };
 
         return $path;
@@ -56,12 +58,12 @@ class TableExporter
      * @param  list<string>  $columns
      * @param  array<string, string>  $types
      */
-    private function writeSheet(CsvWriter|XlsxWriter $writer, string $path, ManagedTable $table, array $columns, array $types, ?int $sourceTableId): void
+    private function writeSheet(CsvWriter|XlsxWriter $writer, string $path, ManagedTable $table, array $columns, array $types, int|array|null $sourceTableIds): void
     {
         $writer->openToFile($path);
         $writer->addRow(Row::fromValues($columns));
 
-        foreach ($this->rows($table, $columns, $types, $sourceTableId) as $row) {
+        foreach ($this->rows($table, $columns, $types, $sourceTableIds) as $row) {
             $writer->addRow(Row::fromValues(array_values($row)));
         }
 
@@ -72,13 +74,13 @@ class TableExporter
      * @param  list<string>  $columns
      * @param  array<string, string>  $types
      */
-    private function writeJson(string $path, ManagedTable $table, array $columns, array $types, ?int $sourceTableId): void
+    private function writeJson(string $path, ManagedTable $table, array $columns, array $types, int|array|null $sourceTableIds): void
     {
         $handle = fopen($path, 'w');
         fwrite($handle, '[');
         $first = true;
 
-        foreach ($this->rows($table, $columns, $types, $sourceTableId) as $row) {
+        foreach ($this->rows($table, $columns, $types, $sourceTableIds) as $row) {
             fwrite($handle, ($first ? "\n  " : ",\n  ").json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
             $first = false;
         }
@@ -94,12 +96,12 @@ class TableExporter
      * @param  array<string, string>  $types
      * @return \Generator<int, array<string, mixed>>
      */
-    private function rows(ManagedTable $table, array $columns, array $types, ?int $sourceTableId): \Generator
+    private function rows(ManagedTable $table, array $columns, array $types, int|array|null $sourceTableIds): \Generator
     {
         $query = DB::table($table->name)->select($columns)->orderByRaw('CHAR_LENGTH(id), id');
 
-        if ($sourceTableId !== null) {
-            $query->whereIn('id', SourceRecord::query()->where('source_table_id', $sourceTableId)->pluck('id')->map(fn (int $id) => SourceRecord::codeFor($id))->all());
+        if ($sourceTableIds !== null) {
+            $query->whereIn('id', SourceRecord::query()->whereIn('source_table_id', (array) $sourceTableIds)->pluck('id')->map(fn (int $id) => SourceRecord::codeFor($id))->all());
         }
 
         foreach ($query->lazy(500) as $row) {

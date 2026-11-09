@@ -8,11 +8,13 @@ use App\Filament\Resources\Spreadsheets\RelationManagers\TabsRelationManager;
 use App\Filament\Resources\Spreadsheets\Schemas\SpreadsheetForm;
 use App\Filament\Resources\Spreadsheets\Tables\SpreadsheetsTable;
 use App\Models\Spreadsheet;
+use App\Support\Access;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class SpreadsheetResource extends Resource
@@ -50,5 +52,13 @@ class SpreadsheetResource extends Resource
             'index' => ListSpreadsheets::route('/'),
             'edit' => EditSpreadsheet::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Only what belongs to the signed-in user's spreadsheets (admins see everything).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return Access::whereSpreadsheet(parent::getEloquentQuery(), 'id');
     }
 }

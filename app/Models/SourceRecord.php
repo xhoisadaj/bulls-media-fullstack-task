@@ -50,6 +50,18 @@ class SourceRecord extends Model
         return 'R-'.($id + 100);
     }
 
+    /**
+     * The row IDs (R-101, …) of the current rows of the given sheet tables.
+     *
+     * @param  list<int>  $sourceTableIds
+     * @return list<string>
+     */
+    public static function codesFor(array $sourceTableIds): array
+    {
+        return static::query()->whereIn('source_table_id', $sourceTableIds)->whereNull('removed_at')
+            ->pluck('id')->map(fn (int $id) => self::codeFor($id))->all();
+    }
+
     public static function idFromCode(string $code): ?int
     {
         return preg_match('/^R-(\d+)$/', $code, $m) ? (int) $m[1] - 100 : null;

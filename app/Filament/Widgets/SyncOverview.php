@@ -8,10 +8,7 @@ use App\Filament\Resources\PendingChanges\PendingChangeResource;
 use App\Filament\Resources\StructureAlerts\StructureAlertResource;
 use App\Filament\Resources\SyncRuns\SyncRunResource;
 use App\Models\GoogleSetting;
-use App\Models\PendingChange;
-use App\Models\Spreadsheet;
-use App\Models\StructureAlert;
-use App\Models\SyncRun;
+use App\Support\Access;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -24,9 +21,9 @@ class SyncOverview extends StatsOverviewWidget
     protected function getStats(): array
     {
         $settings = GoogleSetting::current();
-        $pending = PendingChange::query()->pending()->count();
-        $alerts = StructureAlert::query()->open()->count();
-        $lastRun = SyncRun::query()->latest('id')->first();
+        $pending = PendingChangeResource::getEloquentQuery()->pending()->count();
+        $alerts = StructureAlertResource::getEloquentQuery()->open()->count();
+        $lastRun = SyncRunResource::getEloquentQuery()->latest('id')->first();
 
         $connection = match (true) {
             $settings->use_demo_data => ['Demo data', 'warning'],
@@ -44,16 +41,18 @@ class SyncOverview extends StatsOverviewWidget
                 ->description($alerts > 0 ? 'Sheet layout or access problems' : 'All clear')
                 ->color($alerts > 0 ? 'danger' : 'success')
                 ->url(StructureAlertResource::getUrl()),
-            Stat::make('Tracked spreadsheets', Spreadsheet::query()->where('is_active', true)->count())
-                ->description('Daily sync at '.config('sync.daily_at')),
+            Stat::make('Tracked spreadsheets', Access::spreadsheets()->where('is_active', true)->count())
+                ->description('Synced by the sync schedules'),
             Stat::make('Last sync', $lastRun?->started_at?->diffForHumans() ?? 'Never')
                 ->description($lastRun ? ($lastRun->spreadsheet?->name.': '.$lastRun->status->value) : 'Run "Sync now" on a spreadsheet')
                 ->color($lastRun?->status->getColor() ?? 'gray')
                 ->url(SyncRunResource::getUrl()),
-            Stat::make('Google connection', $connection[0])
-                ->color($connection[1])
-                ->description('Settings → Google connection')
-                ->url(GoogleConnection::getUrl()),
+            ...(Access::isAdmin() ? [
+                Stat::make('Google connection', $connection[0])
+                    ->color($connection[1])
+                    ->description('Settings → Google connection')
+                    ->url(GoogleConnection::getUrl()),
+            ] : []),
         ];
     }
 }

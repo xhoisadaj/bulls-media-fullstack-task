@@ -11,6 +11,7 @@ use App\Google\SpreadsheetImporter;
 use App\Jobs\SyncSpreadsheetJob;
 use App\Models\GoogleSetting;
 use App\Models\Spreadsheet;
+use App\Support\Access;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\TextInput;
@@ -37,8 +38,10 @@ class ListSpreadsheets extends ListRecords
                 ->label('Sync all')
                 ->icon(Heroicon::OutlinedArrowPath)
                 ->color('gray')
+                ->visible(fn (): bool => Access::canEdit())
+                ->authorize(fn (): bool => Access::canEdit())
                 ->action(function () {
-                    $spreadsheets = Spreadsheet::query()->where('is_active', true)->get();
+                    $spreadsheets = Access::spreadsheets()->where('is_active', true)->get();
                     $spreadsheets->each(fn (Spreadsheet $s) => SyncSpreadsheetJob::start($s, TriggerType::Manual));
 
                     Notification::make()->title('Sync started for '.$spreadsheets->count().' spreadsheet(s)')->success()->send();
@@ -46,6 +49,8 @@ class ListSpreadsheets extends ListRecords
 
             Action::make('fetchFromGoogle')
                 ->label('Fetch from Google')
+                ->visible(fn (): bool => Access::isAdmin())
+                ->authorize(fn (): bool => Access::isAdmin())
                 ->icon(Heroicon::OutlinedCloudArrowDown)
                 ->color('gray')
                 // Listing files needs a Google account (OAuth). An API key can only open a sheet it is given.
@@ -64,6 +69,8 @@ class ListSpreadsheets extends ListRecords
 
             Action::make('addByUrl')
                 ->label('Add by URL')
+                ->visible(fn (): bool => Access::isAdmin())
+                ->authorize(fn (): bool => Access::isAdmin())
                 ->icon(Heroicon::OutlinedPlus)
                 ->schema([
                     TextInput::make('url')

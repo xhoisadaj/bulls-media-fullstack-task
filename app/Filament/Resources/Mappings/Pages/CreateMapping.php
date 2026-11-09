@@ -6,6 +6,7 @@ use App\Filament\Resources\Mappings\MappingResource;
 use App\Models\ManagedTable;
 use App\Models\Mapping;
 use App\Models\SourceTable;
+use App\Support\Access;
 use App\Sync\SchemaManager;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +32,12 @@ class CreateMapping extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        abort_unless(Access::whereSourceTable(SourceTable::query(), 'id')->whereKey($data['source_table_id'] ?? null)->exists(), 403);
+
+        if (($this->data['target_mode'] ?? 'new') === 'existing') {
+            abort_unless(Access::whereManagedTable(ManagedTable::query())->whereKey($data['managed_table_id'] ?? null)->exists(), 403);
+        }
+
         $raw = $this->data;
         $table = ($raw['target_mode'] ?? 'new') === 'new'
             ? trim((string) ($raw['new_table_name'] ?? ''))

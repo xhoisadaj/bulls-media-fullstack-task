@@ -7,6 +7,7 @@ use App\Filament\Resources\Mappings\MappingResource;
 use App\Filament\Support\ExportActions;
 use App\Models\SourceTable;
 use App\Models\Tab;
+use App\Support\Access;
 use App\Sync\TableSetup;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -35,16 +36,17 @@ class SourceTablesTable
             ])
             ->filters([
                 SelectFilter::make('tab_id')->label('Tab')
-                    ->options(fn () => Tab::query()->with('spreadsheet')->get()->mapWithKeys(fn (Tab $t) => [$t->id => $t->spreadsheet->name.' / '.$t->name])),
+                    ->options(fn () => Access::whereSpreadsheet(Tab::query())->with('spreadsheet')->get()->mapWithKeys(fn (Tab $t) => [$t->id => $t->spreadsheet->name.' / '.$t->name])),
                 SelectFilter::make('status')->options(SourceTableStatus::class),
             ])
             ->recordActions([
                 Action::make('editColumns')
                     ->label('Add or change columns')
                     ->icon(Heroicon::OutlinedArrowsRightLeft)
-                    ->visible(fn (SourceTable $record): bool => $record->mappings()->exists())
+                    ->visible(fn (SourceTable $record): bool => Access::canEdit() && $record->mappings()->exists())
                     ->url(fn (SourceTable $record) => MappingResource::getUrl('edit', ['record' => $record->mappings()->orderBy('id')->first()])),
                 Action::make('addMapping')
+                    ->visible(fn (): bool => Access::canEdit())
                     ->label(fn (SourceTable $record): string => $record->mappings()->exists() ? 'Save into another table' : 'Save into a table')
                     ->icon(Heroicon::OutlinedPlusCircle)
                     ->color('gray')

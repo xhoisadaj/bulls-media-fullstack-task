@@ -6,6 +6,7 @@ use App\Enums\SyncStatus;
 use App\Filament\Resources\SyncRuns\Pages\ListSyncRuns;
 use App\Models\Spreadsheet;
 use App\Models\SyncRun;
+use App\Support\Access;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Resources\Resource;
@@ -13,6 +14,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class SyncRunResource extends Resource
@@ -85,5 +87,13 @@ class SyncRunResource extends Resource
     public static function canCreate(): bool
     {
         return false;
+    }
+
+    /**
+     * Only what belongs to the signed-in user's spreadsheets (admins see everything).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return Access::whereSpreadsheet(parent::getEloquentQuery());
     }
 }

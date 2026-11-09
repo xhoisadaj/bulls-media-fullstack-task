@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -23,7 +24,7 @@ class CreateAdminCommand extends Command
         }
 
         $password = (string) ($this->option('password') ?: Str::password(16, symbols: false));
-        User::query()->create(['name' => 'Admin', 'email' => $email, 'password' => $password]);
+        User::query()->create(['name' => 'Admin', 'email' => $email, 'password' => $password, 'role' => UserRole::Admin]);
         $this->line('created '.$password);
 
         return self::SUCCESS;

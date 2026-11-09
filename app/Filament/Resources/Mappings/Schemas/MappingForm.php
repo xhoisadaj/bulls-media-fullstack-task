@@ -10,6 +10,7 @@ use App\Models\Mapping;
 use App\Models\MappingColumn;
 use App\Models\SourceColumn;
 use App\Models\SourceTable;
+use App\Support\Access;
 use App\Sync\SchemaManager;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Radio;
@@ -44,7 +45,7 @@ class MappingForm
                 ->schema([
                     Select::make('source_table_id')
                         ->label('Sheet table')
-                        ->options(fn () => SourceTable::query()->with('tab.spreadsheet')->get()->mapWithKeys(fn (SourceTable $t) => [$t->id => $t->label()]))
+                        ->options(fn () => Access::whereSourceTable(SourceTable::query(), 'id')->with('tab.spreadsheet')->get()->mapWithKeys(fn (SourceTable $t) => [$t->id => $t->label()]))
                         ->searchable()
                         ->required()
                         ->live()
@@ -60,7 +61,7 @@ class MappingForm
                         ->hiddenOn('edit'),
                     Select::make('managed_table_id')
                         ->label('Table')
-                        ->options(fn () => ManagedTable::query()->orderBy('name')->pluck('name', 'id'))
+                        ->options(fn () => Access::whereManagedTable(ManagedTable::query())->orderBy('name')->pluck('name', 'id'))
                         ->live()
                         ->afterStateUpdated(fn (Get $get, $livewire, string $operation) => self::openExistingMapping($get, $livewire, $operation))
                         ->visible(fn (Get $get, string $operation) => $operation === 'edit' || $get('target_mode') === 'existing')

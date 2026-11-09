@@ -7,6 +7,7 @@ use App\Google\GoogleCredentialProvider;
 use App\Models\CredentialAudit;
 use App\Models\GoogleSetting;
 use App\Settings\GoogleSettingsManager;
+use App\Support\Access;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -37,6 +38,11 @@ class GoogleConnection extends Page
     protected static ?string $title = 'Google connection';
 
     protected static ?string $slug = 'google-connection';
+
+    public static function canAccess(): bool
+    {
+        return Access::isAdmin();
+    }
 
     public function content(Schema $schema): Schema
     {

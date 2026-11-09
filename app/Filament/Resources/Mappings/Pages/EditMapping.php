@@ -7,6 +7,7 @@ use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Filament\Resources\Mappings\MappingResource;
 use App\Google\Exceptions\GoogleAccessException;
 use App\Jobs\SyncSpreadsheetJob;
+use App\Support\Access;
 use App\Sync\SheetReader;
 use App\Sync\TabFetcher;
 use App\Sync\TargetWriter;
@@ -28,6 +29,8 @@ class EditMapping extends EditRecord
         return [
             Action::make('syncNow')
                 ->label('Sync now')
+                ->visible(fn (): bool => Access::canEdit())
+                ->authorize(fn (): bool => Access::canEdit())
                 ->icon(Heroicon::OutlinedArrowPath)
                 ->action(function () {
                     SyncSpreadsheetJob::start($this->record->sourceTable->tab->spreadsheet, TriggerType::Manual);

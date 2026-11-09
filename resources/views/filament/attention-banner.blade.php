@@ -1,7 +1,7 @@
 @php
-    $alerts = \App\Models\StructureAlert::query()->where('status', \App\Enums\AlertStatus::Open)->latest('updated_at')->limit(3)->get();
-    $alertCount = \App\Models\StructureAlert::query()->where('status', \App\Enums\AlertStatus::Open)->count();
-    $pending = \App\Models\PendingChange::query()->pending()->count();
+    $alerts = \App\Filament\Resources\StructureAlerts\StructureAlertResource::getEloquentQuery()->where('status', \App\Enums\AlertStatus::Open)->latest('updated_at')->limit(3)->get();
+    $alertCount = \App\Filament\Resources\StructureAlerts\StructureAlertResource::getEloquentQuery()->where('status', \App\Enums\AlertStatus::Open)->count();
+    $pending = \App\Filament\Resources\PendingChanges\PendingChangeResource::getEloquentQuery()->pending()->count();
     $onAlerts = request()->routeIs('filament.admin.resources.structure-alerts.*');
     $onInbox = request()->routeIs('filament.admin.resources.pending-changes.*');
 @endphp

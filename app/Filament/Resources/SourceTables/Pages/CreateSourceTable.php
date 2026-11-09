@@ -18,6 +18,7 @@ use App\Models\SourceColumn;
 use App\Models\SourceTable;
 use App\Models\Spreadsheet;
 use App\Models\Tab;
+use App\Support\Access;
 use App\Sync\SchemaManager;
 use App\Sync\TableSetup;
 use Filament\Forms\Components\Hidden;
@@ -70,7 +71,7 @@ class CreateSourceTable extends CreateRecord
                 ->schema([
                     Select::make('spreadsheet_id')
                         ->label('Spreadsheet')
-                        ->options(fn () => Spreadsheet::query()->orderBy('name')->pluck('name', 'id'))
+                        ->options(fn () => Access::spreadsheets()->orderBy('name')->pluck('name', 'id'))
                         ->searchable()
                         ->required()
                         ->live()
@@ -153,7 +154,7 @@ class CreateSourceTable extends CreateRecord
                         }),
                     Select::make('managed_table_id')
                         ->label('Table')
-                        ->options(fn () => ManagedTable::query()->orderBy('name')->pluck('name', 'id'))
+                        ->options(fn () => Access::whereManagedTable(ManagedTable::query())->orderBy('name')->pluck('name', 'id'))
                         ->visible(fn (Get $get): bool => $get('target_mode') === 'existing')
                         ->required(fn (Get $get): bool => $get('target_mode') === 'existing')
                         ->helperText('On the next step, each sheet column is matched to a column of this table by name; you pick the rest.'),
@@ -274,6 +275,12 @@ class CreateSourceTable extends CreateRecord
      */
     protected function handleRecordCreation(array $data): Model
     {
+        abort_unless(Access::canAccessSpreadsheet(Tab::query()->find($data['tab_id'] ?? null)?->spreadsheet_id), 403);
+
+        if (($data['target_mode'] ?? 'new') === 'existing') {
+            abort_unless(Access::whereManagedTable(ManagedTable::query())->whereKey($data['managed_table_id'] ?? null)->exists(), 403);
+        }
+
         $this->assertKeyIsUnique($data);
 
         $columns = array_values($data['columns'] ?? []);

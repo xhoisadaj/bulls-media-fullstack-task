@@ -3,6 +3,7 @@
 namespace App\Sync;
 
 use App\Enums\SyncStatus;
+use App\Enums\UserRole;
 use App\Models\StructureAlert;
 use App\Models\SyncRun;
 use App\Models\User;
@@ -34,7 +35,11 @@ class SyncNotifier
         ]);
         $body = '"'.$name.'": '.implode(', ', $parts).'.';
 
-        $users = User::all();
+        // Admins, and the users the spreadsheet is shared with.
+        $users = User::query()
+            ->where('role', UserRole::Admin)
+            ->orWhereHas('spreadsheets', fn ($q) => $q->whereKey($run->spreadsheet_id))
+            ->get();
 
         FilamentNotification::make()
             ->title($failed ? 'Sync needs attention' : 'Sync finished')

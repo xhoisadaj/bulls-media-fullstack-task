@@ -7,6 +7,7 @@ use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Models\ManagedTable;
 use App\Models\SourceRecord;
 use App\Models\SourceTable;
+use App\Support\Access;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
@@ -52,6 +53,23 @@ class BrowseManagedTable extends Page implements HasTable
     /**
      * True while a sync of any spreadsheet that writes into this table is queued or running.
      */
+    /**
+     * The sheet tables whose rows can be shown: the "From file" choice, limited to the user's files.
+     * Null means every row.
+     *
+     * @return list<int>|null
+     */
+    public static function visibleSourceTables(mixed $chosen): ?array
+    {
+        $allowed = Access::sourceTableIds();
+
+        if (blank($chosen)) {
+            return $allowed;
+        }
+
+        return $allowed === null || in_array((int) $chosen, $allowed, true) ? [(int) $chosen] : [];
+    }
+
     public function isSyncing(): bool
     {
         /** @var ManagedTable $record */
@@ -71,8 +89,7 @@ class BrowseManagedTable extends Page implements HasTable
                 fn (string $format, string $label) => Action::make('export_'.$format)
                     ->label($label)
                     ->action(function () use ($record, $format) {
-                        $source = $this->tableFilters['source']['value'] ?? null;
-                        $path = app(TableExporter::class)->export($record, $format, filled($source) ? (int) $source : null);
+                        $path = app(TableExporter::class)->export($record, $format, self::visibleSourceTables($this->tableFilters['source']['value'] ?? null));
 
                         return response()->download($path)->deleteFileAfterSend();
                     }),
@@ -110,15 +127,11 @@ class BrowseManagedTable extends Page implements HasTable
                     return new LengthAwarePaginator([], 0, $recordsPerPage, $page);
                 }
 
-                $source = $filters['source']['value'] ?? null;
+                $visible = self::visibleSourceTables($filters['source']['value'] ?? null);
 
                 // IDs are R-101, R-102, …: order by length first so R-1000 comes after R-999.
                 $query = DB::table($name)->orderByRaw('CHAR_LENGTH(id), id')
-                    ->when(filled($source), fn ($q) => $q->whereIn('id', SourceRecord::query()
-                        ->where('source_table_id', $source)
-                        ->pluck('id')
-                        ->map(fn (int $id) => SourceRecord::codeFor($id))
-                        ->all()));
+                    ->when($visible !== null, fn ($q) => $q->whereIn('id', SourceRecord::codesFor($visible)));
 
                 $paginator = $query->paginate($recordsPerPage, ['*'], 'page', $page);
 
@@ -136,7 +149,7 @@ class BrowseManagedTable extends Page implements HasTable
             ->filters([
                 SelectFilter::make('source')
                     ->label('From file')
-                    ->options(fn (): array => SourceTable::query()
+                    ->options(fn (): array => Access::whereSourceTable(SourceTable::query(), 'id')
                         ->whereHas('mappings', fn ($q) => $q->where('managed_table_id', $record->id))
                         ->with('tab.spreadsheet')
                         ->get()

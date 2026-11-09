@@ -86,11 +86,19 @@ Google sits behind one interface, `SheetsGateway`. Its in-memory implementation 
 
 A failing file never stops the others. Within a file, a broken table never stops the other tables (the run is marked `partial`). A cache lock prevents two syncs of the same file at once. Every sync compares the whole sheet with what is stored, so a missed or repeated run is harmless.
 
+## 11. Users, roles and file access: one Google connection, files shared inside the app
+
+Three roles: **admin** (everything), **editor** (works on the spreadsheets shared with them: sheet tables, mappings, sync, approving changes, exports) and **viewer** (looks at and exports their files' data). An admin shares spreadsheets with users in Settings → Users.
+
+Access follows the files: a user sees a spreadsheet and everything that belongs to it (sheet tables, changes, alerts, sync history), and in a shared database table like `sales` only the rows that came from their files (browse and export). It's enforced on the server (policies and scoped queries in one place, `App\Support\Access`), not only by hiding buttons. Changing the structure of database tables, the Google connection, schedules and users stay admin-only, because they affect everyone.
+
+I deliberately kept **one Google connection, set by the admin**, instead of letting each user connect their own account. Per-user connections would need a credential per file (and a rule for which one wins when two users connect the same file), files would stop syncing when that user's token expires or they leave, and in Google's "Testing" mode every user must be added as a test user and reconnect weekly. For the goal ("the admin decides which files a user sees"), sharing inside the app gives the same result with none of those failure modes.
+
 ## Out of scope (future work)
 
 - Similarity matching (rejected on purpose, see §3)
 - Merging duplicates across files into unique entities (e.g. one customer row for many orders)
 - Images inserted into cells or floating over the grid (the Sheets API doesn't export them; `=IMAGE()` URLs are supported)
-- Multiple users and roles
+- Each user connecting their own Google account (see §11)
 - Changing the type of, or renaming, an existing target column (remapping is add + stop)
 - Service account authentication
