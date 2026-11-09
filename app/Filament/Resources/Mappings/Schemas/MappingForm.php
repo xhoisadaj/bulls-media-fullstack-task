@@ -82,7 +82,7 @@ class MappingForm
 
             Section::make('Columns')
                 ->columnSpanFull()
-                ->description('Each row saves one sheet column into a database column. Saved rows are locked: a database column is never renamed or retyped. To stop syncing a column, remove its row (the column and its data stay). To add one, use "Map a sheet column": type any name and pick the type (the recommended one is preselected).')
+                ->description('Each row saves one sheet column into a database column. Saved rows are locked: a database column is never renamed or retyped. To stop syncing a column, remove its row (the column and its data stay). To add one, use "Map a sheet column": type any name and pick the type (the recommended one is preselected). Compare: on = an edit in this column shows the row as changed in the Review inbox; off = it\'s saved, but edits to it alone don\'t count as a change (use it for columns that change by themselves, like a "last updated" time). Compare can be switched on saved rows too.')
                 ->schema([
                     Text::make(fn (Get $get): ?HtmlString => self::overview(self::targetTable($get), $get('source_table_id'), $get('columns') ?? []))
                         ->visible(fn (Get $get): bool => self::targetTable($get) !== null),
@@ -103,11 +103,15 @@ class MappingForm
                     ])->visible(fn (Get $get): bool => self::targetTable($get) !== null && filled($get('source_table_id'))),
                     Repeater::make('columns')
                         ->relationship()
+                        // Compare belongs to the sheet column, not to the mapping row: store it there.
+                        ->mutateRelationshipDataBeforeCreateUsing(fn (array $data): array => self::storeCompare($data, null))
+                        ->mutateRelationshipDataBeforeSaveUsing(fn (array $data, MappingColumn $record): array => self::storeCompare($data, $record))
                         ->hiddenLabel()
                         ->table([
                             TableColumn::make('Sheet column')->markAsRequired(),
                             TableColumn::make('Database column')->markAsRequired(),
                             TableColumn::make('Type')->markAsRequired(),
+                            TableColumn::make('Compare'),
                             TableColumn::make('Notes'),
                         ])
                         ->defaultItems(0)
@@ -173,12 +177,40 @@ class MappingForm
                                 })
                                 ->disabled(fn (Get $get, ?MappingColumn $record): bool => self::isSaved($record) || self::existingType(self::targetTable($get, '../../'), $get('target_column')) !== null)
                                 ->dehydrated(fn (?MappingColumn $record): bool => ! self::isSaved($record)),
+                            Toggle::make('compare')
+                                ->label('Compare')
+                                ->hiddenLabel()
+                                ->default(true)
+                                ->afterStateHydrated(function (Toggle $component, ?MappingColumn $record): void {
+                                    if ($record?->sourceColumn !== null) {
+                                        $component->state($record->sourceColumn->compare);
+                                    }
+                                }),
                             Text::make(fn (Get $get, ?MappingColumn $record): HtmlString => self::isSaved($record)
                                 ? new HtmlString('<span class="ss-muted">Saved. Locked; remove the row to stop syncing it.</span>')
                                 : self::typeNote(self::targetTable($get, '../../'), $get('source_column_id'), $get('target_column'), $get('target_type'))),
                         ]),
                 ]),
         ]);
+    }
+
+    /**
+     * Saves a row's Compare switch on its sheet column and removes it from the mapping row data.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function storeCompare(array $data, ?MappingColumn $record): array
+    {
+        $sourceColumnId = $data['source_column_id'] ?? $record?->source_column_id;
+
+        if (array_key_exists('compare', $data) && $sourceColumnId !== null) {
+            SourceColumn::query()->whereKey($sourceColumnId)->update(['compare' => (bool) $data['compare']]);
+        }
+
+        unset($data['compare']);
+
+        return $data;
     }
 
     /**

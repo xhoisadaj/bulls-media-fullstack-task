@@ -285,3 +285,19 @@ it('syncs from the mapping page and opens the table data', function () {
 
     expect($mapping->sourceTable->tab->spreadsheet->syncRuns()->count())->toBeGreaterThan(0);
 });
+
+it('sets Compare per column on the mapping page, also for saved rows', function () {
+    $london = SourceTable::query()->where('name', 'London orders')->first();
+    $mapping = Mapping::query()->where('source_table_id', $london->id)->whereHas('managedTable', fn ($q) => $q->where('name', 'sales'))->first();
+    $amount = $london->columns()->where('header', 'amount')->first();
+
+    $page = Livewire::test(EditMapping::class, ['record' => $mapping->getRouteKey()]);
+    $key = collect($page->get('data.columns'))->search(fn ($column) => (int) $column['source_column_id'] === $amount->id);
+
+    expect(collect($page->get('data.columns'))->pluck('compare')->unique()->all())->toBe([true]);
+
+    $page->set("data.columns.{$key}.compare", false)->call('save')->assertHasNoErrors();
+
+    expect($amount->refresh()->compare)->toBeFalse()
+        ->and($london->trackedColumns()->pluck('header')->all())->not->toContain('amount');
+});

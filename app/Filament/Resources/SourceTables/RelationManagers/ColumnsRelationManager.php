@@ -46,7 +46,10 @@ class ColumnsRelationManager extends RelationManager
                 TextColumn::make('position')->label('#'),
                 TextColumn::make('header')->weight('semibold'),
                 TextColumn::make('type')->badge()->color('gray'),
-                IconColumn::make('compare')->boolean(),
+                IconColumn::make('compare')->boolean()
+                    ->state(fn (SourceColumn $record): ?bool => $record->isMapped() ? $record->compare : null)
+                    ->placeholder('—')
+                    ->tooltip(fn (SourceColumn $record): ?string => $record->isMapped() ? null : 'Not saved anywhere, so it is never compared.'),
                 IconColumn::make('is_present')->label('In sheet')->boolean(),
                 TextColumn::make('mapped')->label('Mapped to')
                     ->state(fn (SourceColumn $record) => $record->mappingColumns()->with('mapping.managedTable')->get()

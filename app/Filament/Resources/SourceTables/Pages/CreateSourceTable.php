@@ -247,7 +247,9 @@ class CreateSourceTable extends CreateRecord
                             Select::make('type')->label('Type')->hiddenLabel()->options(ColumnType::class)->required()->live()
                                 ->disabled(fn (Get $get): bool => self::pickedExisting($get('../../target_mode'), $get('../../managed_table_id'), $get('target_pick')))
                                 ->dehydrated(),
-                            Toggle::make('compare')->label('Compare')->hiddenLabel(),
+                            Toggle::make('compare')->label('Compare')->hiddenLabel()
+                                ->disabled(fn (Get $get): bool => ! $get('save'))
+                                ->dehydrated(),
                             Text::make(fn (Get $get): HtmlString => self::sampleCells(
                                 $get('samples') ?? [],
                                 $get('warning'),

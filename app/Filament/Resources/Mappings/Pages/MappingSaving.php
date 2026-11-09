@@ -51,6 +51,7 @@ trait MappingSaving
 
     protected function applySchemaAndBackfill(Mapping $mapping): void
     {
+
         try {
             $changes = app(SchemaManager::class)->apply($mapping->refresh());
         } catch (SchemaException $e) {
