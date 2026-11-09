@@ -32,17 +32,23 @@ class TabsRelationManager extends RelationManager
                 TextColumn::make('google_tab_id')->label('Tab ID')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([
-                Action::make('setUpTable')
-                    ->visible(fn (): bool => Access::canEdit())
-                    ->label('Add a sheet table')
-                    ->icon(Heroicon::OutlinedPlusCircle)
-                    ->visible(fn (Tab $record) => $record->is_present)
-                    ->url(fn (Tab $record) => SourceTableResource::getUrl('create', ['tab' => $record->id])),
+                Action::make('openTable')
+                    ->label('Open sheet table')
+                    ->icon(Heroicon::OutlinedTableCells)
+                    ->visible(fn (Tab $record): bool => $record->sourceTables()->count() === 1)
+                    ->url(fn (Tab $record) => SourceTableResource::getUrl('edit', ['record' => $record->sourceTables()->first()])),
                 Action::make('viewTables')
-                    ->label('View tables')
-                    ->color('gray')
-                    ->visible(fn (Tab $record) => $record->sourceTables()->exists())
+                    ->label(fn (Tab $record): string => 'Open sheet tables ('.$record->sourceTables()->count().')')
+                    ->icon(Heroicon::OutlinedTableCells)
+                    ->visible(fn (Tab $record): bool => $record->sourceTables()->count() > 1)
                     ->url(fn (Tab $record) => SourceTableResource::getUrl('index', ['filters' => ['tab_id' => ['value' => $record->id]]])),
+                Action::make('setUpTable')
+                    ->label(fn (Tab $record): string => $record->sourceTables()->exists() ? 'Add another table' : 'Add a sheet table')
+                    ->icon(Heroicon::OutlinedPlusCircle)
+                    ->color(fn (Tab $record): string => $record->sourceTables()->exists() ? 'gray' : 'primary')
+                    ->visible(fn (Tab $record): bool => Access::canEdit() && $record->is_present)
+                    ->tooltip(fn (Tab $record): ?string => $record->sourceTables()->exists() ? 'Only for a second table in the same tab (e.g. a table stacked below the first one).' : null)
+                    ->url(fn (Tab $record) => SourceTableResource::getUrl('create', ['tab' => $record->id])),
             ])
             ->paginated(false);
     }

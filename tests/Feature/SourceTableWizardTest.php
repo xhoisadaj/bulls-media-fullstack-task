@@ -2,6 +2,7 @@
 
 use App\Enums\IdentityMode;
 use App\Filament\Resources\SourceTables\Pages\CreateSourceTable;
+use App\Filament\Resources\SourceTables\Pages\EditSourceTable;
 use App\Google\Contracts\SheetsGateway;
 use App\Google\InMemorySheetsGateway;
 use App\Models\ManagedTable;
@@ -190,4 +191,42 @@ it('only lists the tabs of the chosen spreadsheet, preselected when opened from 
         ->test(CreateSourceTable::class)
         ->assertSchemaStateSet(['spreadsheet_id' => $this->tab->spreadsheet_id, 'tab_id' => $this->tab->id])
         ->assertFormFieldExists('tab_id', fn ($field) => array_values($field->getOptions()) === ['Orders']);
+});
+
+it('opens a saved sheet table with every step filled in, and saves changes from it', function () {
+    throughTarget(Livewire::test(CreateSourceTable::class), $this->tab->id, 'r3c2')
+        ->fillForm(['identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review'])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    $table = SourceTable::query()->sole();
+    $page = Livewire::test(EditSourceTable::class, ['record' => $table->getRouteKey()]);
+
+    $page->assertSee('Wizard / Orders')
+        ->assertSee('wizard_orders')
+        ->assertSee('wizard_orders.product_name')
+        ->assertSeeHtml('ss-grid-head')
+        ->assertSchemaStateSet(['header_row' => 3, 'start_column' => 2, 'identity_mode' => IdentityMode::SystemId]);
+
+    $price = $table->columns()->where('header', 'price')->first();
+    $key = collect($page->get('data.columns'))->search(fn ($c) => ($c['id'] ?? null) === $price->id);
+
+    $page->set("data.columns.{$key}.compare", false)->call('save')->assertHasNoErrors();
+
+    expect($price->refresh()->compare)->toBeFalse();
+});
+
+it('opens the saved setup when the chosen table is already set up, instead of adding it twice', function () {
+    throughTarget(Livewire::test(CreateSourceTable::class), $this->tab->id, 'r3c2')
+        ->fillForm(['identity_mode' => IdentityMode::SystemId->value, 'apply_mode' => 'review'])
+        ->call('create');
+
+    $existing = SourceTable::query()->sole();
+    $wizard = Livewire::test(CreateSourceTable::class)->fillForm(['spreadsheet_id' => $this->tab->spreadsheet_id, 'tab_id' => $this->tab->id]);
+    nextStep($wizard, 0);
+
+    $wizard->assertSee('already set up')->fillForm(['detected' => 'r3c2']);
+    nextStep($wizard, 1)->assertRedirect(EditSourceTable::getUrl(['record' => $existing]));
+
+    expect(SourceTable::query()->count())->toBe(1);
 });

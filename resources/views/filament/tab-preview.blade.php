@@ -14,7 +14,7 @@
         <div>
             <p class="ss-strong">Tab preview</p>
             <p class="ss-muted">
-                The selected table is highlighted. Click a header cell to choose where a table starts.
+                The selected table is highlighted. {{ ($clickMode ?? 'create') === 'edit' ? 'Click a cell to move the header position (it is found again by header names anyway).' : 'Click a header cell to choose where a table starts.' }}
                 @if ($preview['total_rows'] > count($preview['rows']) || $preview['total_columns'] > $preview['columns'])
                     Showing {{ count($preview['rows']) }} of {{ $preview['total_rows'] }} rows and {{ $preview['columns'] }} of {{ $preview['total_columns'] }} columns.
                 @endif
@@ -38,7 +38,10 @@
                 x-on:click="
                     const td = $event.target.closest('td[data-cell]');
                     if (! td) return;
-                    if (td.dataset.option) {
+                    if (@js(($clickMode ?? 'create') === 'edit')) {
+                        $wire.set('data.start_column', Number(td.dataset.col), false);
+                        $wire.set('data.header_row', Number(td.dataset.row));
+                    } else if (td.dataset.option) {
                         $wire.set('data.detected', td.dataset.option);
                     } else {
                         $wire.set('data.manual_cell', td.dataset.cell, false);
@@ -65,6 +68,8 @@
                                     @endphp
                                     <td
                                         data-cell="{{ $cell }}"
+                                        data-row="{{ $r + 1 }}"
+                                        data-col="{{ $c + 1 }}"
                                         @if (isset($preview['tables'][$cell])) data-option="{{ $preview['tables'][$cell] }}" @endif
                                         @class([
                                             'ss-grid-in' => $inTable($r, $c),

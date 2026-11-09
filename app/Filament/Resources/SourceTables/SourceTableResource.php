@@ -5,7 +5,6 @@ namespace App\Filament\Resources\SourceTables;
 use App\Filament\Resources\SourceTables\Pages\CreateSourceTable;
 use App\Filament\Resources\SourceTables\Pages\EditSourceTable;
 use App\Filament\Resources\SourceTables\Pages\ListSourceTables;
-use App\Filament\Resources\SourceTables\RelationManagers\ColumnsRelationManager;
 use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
 use App\Filament\Resources\SourceTables\Tables\SourceTablesTable;
 use App\Models\SourceTable;
@@ -46,7 +45,8 @@ class SourceTableResource extends Resource
 
     public static function getRelations(): array
     {
-        return [ColumnsRelationManager::class];
+        // Columns are shown and edited in the "Columns" step of the sheet table page.
+        return [];
     }
 
     public static function getPages(): array

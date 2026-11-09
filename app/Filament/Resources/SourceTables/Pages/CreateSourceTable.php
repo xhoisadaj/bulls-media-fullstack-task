@@ -28,6 +28,7 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
@@ -36,6 +37,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Components\Wizard\Step;
+use Filament\Support\Exceptions\Halt;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
@@ -113,6 +115,19 @@ class CreateSourceTable extends CreateRecord
                 ->afterValidation(function (Get $get, Set $set) {
                     [$row, $column] = $this->chosenPosition($get('detected'), $get('manual_cell'));
                     $tab = Tab::query()->findOrFail($get('tab_id'));
+                    $existing = SourceTable::query()->where('tab_id', $tab->id)->where('header_row', $row)->where('start_column', $column)->first();
+
+                    // Already set up: open the saved setup instead of setting it up twice.
+                    if ($existing !== null) {
+                        Notification::make()
+                            ->title('This table is already set up')
+                            ->body('Here is its saved setup. Change anything there and save.')
+                            ->info()
+                            ->send();
+                        $this->redirect(SourceTableResource::getUrl('edit', ['record' => $existing]), navigate: true);
+
+                        throw new Halt;
+                    }
 
                     try {
                         $columns = app(TableSetup::class)->columns($tab, $row, $column);
@@ -397,7 +412,8 @@ class CreateSourceTable extends CreateRecord
         $options = [];
 
         foreach ($tables as $table) {
-            $options['r'.($table->headerRow + 1).'c'.($table->startColumn + 1)] = 'Headers at '.A1::cell($table->headerRow, $table->startColumn).': '.implode(', ', array_filter($table->headers));
+            $setUp = SourceTable::query()->where('tab_id', $tab->id)->where('header_row', $table->headerRow + 1)->where('start_column', $table->startColumn + 1)->exists();
+            $options['r'.($table->headerRow + 1).'c'.($table->startColumn + 1)] = 'Headers at '.A1::cell($table->headerRow, $table->startColumn).': '.implode(', ', array_filter($table->headers)).($setUp ? '  (already set up: opens its saved setup)' : '');
         }
 
         return $options + ['manual' => 'Somewhere else: enter the header cell'];
