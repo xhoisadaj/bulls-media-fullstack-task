@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AlertType;
+use App\Exports\TableExporter;
 use App\Filament\Pages\GoogleConnection;
 use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Filament\Resources\ManagedTables\Pages\BrowseManagedTable;
@@ -319,4 +320,16 @@ it('shows open alerts and changes waiting for review in a banner on other pages'
 
     $this->get('/admin/structure-alerts')->assertOk()->assertDontSee('your attention')->assertSee('Needs attention');
     $this->get('/admin/pending-changes')->assertOk()->assertDontSee('waits for your review')->assertSee('Waiting for review');
+});
+
+it('exports from the sheet tables and target tables lists', function () {
+    $london = SourceTable::query()->where('name', 'London orders')->first();
+    $sales = ManagedTable::query()->where('name', 'sales')->first();
+
+    Livewire::test(ListSourceTables::class)->callTableAction('export_csv', $london)->assertFileDownloaded();
+    Livewire::test(ListManagedTables::class)->callTableAction('export_xlsx', $sales)->assertFileDownloaded();
+
+    $path = app(TableExporter::class)->export($sales, 'json', $london->id);
+
+    expect(json_decode(file_get_contents($path), true))->toHaveCount($london->records()->whereNull('removed_at')->count());
 });

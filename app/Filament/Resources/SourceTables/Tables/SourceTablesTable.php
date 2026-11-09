@@ -4,6 +4,7 @@ namespace App\Filament\Resources\SourceTables\Tables;
 
 use App\Enums\SourceTableStatus;
 use App\Filament\Resources\Mappings\MappingResource;
+use App\Filament\Support\ExportActions;
 use App\Models\SourceTable;
 use App\Models\Tab;
 use App\Sync\TableSetup;
@@ -48,6 +49,10 @@ class SourceTablesTable
                     ->icon(Heroicon::OutlinedPlusCircle)
                     ->color('gray')
                     ->url(fn (SourceTable $record) => MappingResource::getUrl('create', ['source_table' => $record->id])),
+                ExportActions::group(
+                    fn (SourceTable $record) => [$record->mappings()->orderBy('id')->firstOrFail()->managedTable, $record->id],
+                    fn (SourceTable $record): bool => $record->mappings()->exists(),
+                )->tooltip('This sheet table\'s rows, from the database table it saves into'),
                 EditAction::make(),
                 DeleteAction::make()->modalDescription('Its stored records and pending changes are removed. Target tables keep their data.'),
             ])

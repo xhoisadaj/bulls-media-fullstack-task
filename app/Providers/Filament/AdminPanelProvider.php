@@ -12,6 +12,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -39,6 +40,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Activity'),
                 NavigationGroup::make('Settings'),
             ])
+            ->maxContentWidth(Width::Full)
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => view('filament.styles'))
             ->renderHook(PanelsRenderHook::PAGE_START, fn () => view('filament.attention-banner'))
             ->databaseNotifications()

@@ -6,6 +6,7 @@ use App\Enums\ColumnType;
 use App\Filament\Resources\ManagedTables\Pages\BrowseManagedTable;
 use App\Filament\Resources\ManagedTables\Pages\ListManagedTables;
 use App\Filament\Resources\SourceTables\Schemas\SourceTableForm;
+use App\Filament\Support\ExportActions;
 use App\Models\ManagedTable;
 use App\Sync\SchemaException;
 use App\Sync\SchemaManager;
@@ -64,6 +65,10 @@ class ManagedTableResource extends Resource
                     ->label('Browse data')
                     ->icon(Heroicon::OutlinedTableCells)
                     ->url(fn (ManagedTable $record) => self::getUrl('browse', ['record' => $record])),
+                ExportActions::group(
+                    fn (ManagedTable $record) => [$record, null],
+                    fn (ManagedTable $record): bool => Schema::hasTable($record->name),
+                ),
                 Action::make('history')
                     ->label('Schema history')
                     ->color('gray')
