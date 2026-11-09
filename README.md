@@ -88,7 +88,7 @@ FILE (Google spreadsheet)
 
 ### The sync
 
-One queued job per spreadsheet, scheduled daily at 02:00 (`SYNC_DAILY_AT`) and also available as "Sync now":
+One queued job per spreadsheet, started by the **sync schedules** (Activity → Sync schedules: any times of day, chosen weekdays, a timezone, all files or one file; a default "every day at 02:00, all files" schedule is created on install, `SYNC_DAILY_AT`), and also available as "Sync now" / "Sync all files":
 
 1. **Read.** One batch request per file: raw values (numbers, dates) and displayed text (for text columns, so leading zeros survive).
 2. **Locate.** Each table is found by its **header names**. Cell positions are only hints, so headers that moved or columns inserted to the left don't matter.
@@ -146,7 +146,7 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 | # | Requirement | Where |
 |---|---|---|
 | 1 | Similar files, extra columns, different positions | Headers matched by name ([`TableLocator`](app/Sync/TableLocator.php), [`StructureInspector`](app/Sync/StructureInspector.php)); tables can start anywhere (e.g. H99) |
-| 2 | List of files, saved daily | [`sheets:sync`](app/Console/Commands/SyncSheetsCommand.php) scheduled daily ([`routes/console.php`](routes/console.php)), one [`SyncSpreadsheetJob`](app/Jobs/SyncSpreadsheetJob.php) per file |
+| 2 | List of files, saved daily | [`sheets:run-schedules`](app/Console/Commands/RunSyncSchedulesCommand.php) runs every minute ([`routes/console.php`](routes/console.php)) and starts the due [sync schedules](app/Models/SyncSchedule.php) (daily by default), one [`SyncSpreadsheetJob`](app/Jobs/SyncSpreadsheetJob.php) per file |
 | 3 | Configuration of files, tabs, columns | DB tables `spreadsheets`, `tabs`, `source_tables`, `source_columns`, managed in the UI |
 | 4–5 | Matching file → table, renamed columns, one file → many tables | `mappings` + `mapping_columns`; [`TargetWriter`](app/Sync/TargetWriter.php) writes each mapping by our row ID (`id` = `R-101`) |
 | 6 | New config column → ALTER TABLE + store data | [`SchemaManager`](app/Sync/SchemaManager.php) + [`Backfiller`](app/Sync/Backfiller.php) |
@@ -162,7 +162,7 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 2. **Sources → Spreadsheets:** **Fetch from Google** (OAuth) or **Add by URL**. Then open a spreadsheet and enable its tabs.
 3. **Add a sheet table** (one wizard, sheet → database): pick the tab; confirm the detected table (a spreadsheet-like preview highlights it; click a cell to choose another header position); choose where to save it (**a new database table** or **an existing one**, e.g. a second file into `sales`); then, per column, the database name and the type (suggested from the data, set once) and whether to save it; finally the identity mode (a key is checked for uniqueness) and Review or Auto. **Create** builds the table and starts the first sync, which imports every row right away.
 4. **Column mappings** (optional, advanced): change which columns are saved later, or save one sheet table into **more** database tables (e.g. products into `sales`, customers into `customers`). Names are free text and each column has a type; values are converted when it differs from the sheet type. With an existing table, its columns are suggested, **Map matching columns** pairs same-named columns, and an overview shows what this file fills. **Preview** shows what will be written.
-5. **Sync now**, or wait for the daily run. The **first sync of a table imports all its rows right away** (there is nothing to compare with yet); from the next sync on, **Review → Review inbox** shows changes with field diffs, which you approve or reject. **Review → Alerts** shows new or missing columns (with "Map this column"), moved headers, blocked mass removals, access problems and fallback use.
+5. **Sync now** / **Sync all files**, or let a **sync schedule** run it (Activity → Sync schedules: several times a day, chosen weekdays, in your timezone; your timezone is set with "Your timezone" and all dates in the app are shown in it). The **first sync of a table imports all its rows right away** (there is nothing to compare with yet); from the next sync on, **Review → Review inbox** shows changes with field diffs, which you approve or reject. **Review → Alerts** shows new or missing columns (with "Map this column"), moved headers, blocked mass removals, access problems and fallback use.
 6. **Activity:** sync history (counts, skipped rows, the credential used), target tables with a data browser (filter by the file rows came from), schema history, and removal of empty columns and tables.
 
 ## Demo scenarios
