@@ -1,4 +1,16 @@
-# Google credentials
+# Google API tokens: what they are and how to create them
+
+The app needs permission to read your Google Sheets through the **Google Sheets API**. Google calls these credentials keys and tokens. There are three kinds, and this app uses the first two:
+
+| Token | What it is | How you get it | In this app |
+|---|---|---|---|
+| **API key** | A string like `AIza…` that identifies your Google Cloud project (not a person). | You create it in Google Cloud → Credentials ([Option B](#option-b-api-key)). | Fallback. Reads sheets shared as "Anyone with the link can view". Can't list your files. |
+| **OAuth tokens** (access token + refresh token) | Proof that a Google user allowed the app to read their sheets. The access token lasts about an hour; the refresh token gets new ones. | You create an **OAuth client** (client ID + secret) in Google Cloud ([Option A](#option-a-oauth-client)), then click **Connect Google account** in the app and allow access. Google then sends the tokens to the app. | Default. Reads your private sheets and lists them, without sharing anything. The app stores the tokens encrypted and renews the access token by itself. |
+| Service account key (JSON) | A "robot" Google account with its own key file. Every sheet must be shared with its email. | Google Cloud → Service accounts. | Not used, on purpose: sharing every sheet with a robot email is the step this app avoids (see [DECISIONS.md §7](DECISIONS.md)). |
+
+So "creating the Google API tokens" means: **create the OAuth client and connect** (Option A), and/or **create an API key** (Option B). Both take a few minutes; the steps are below.
+
+## Overview
 
 Sheets Sync connects to Google with your **own** credentials. There are two options, and you can use both:
 

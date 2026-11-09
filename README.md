@@ -61,10 +61,10 @@ You can set these variables in front of the command: `APP_URL`, `APP_PORT`, `DB_
 
 ## Google credentials
 
-The reviewer uses their **own** Google credentials: no keys, accounts or sheets of mine are included.
+The reviewer uses their **own** Google credentials: no keys, accounts or sheets of mine are included. [docs/GOOGLE_API.md](docs/GOOGLE_API.md) starts with **what the "Google API tokens" are** and then explains how to create each one.
 
-- **OAuth (default):** reads the private sheets of the connected Google account. No sheet has to be shared with any email.
-- **API key (fallback):** reads sheets set to "Anyone with the link can view". It is used automatically when OAuth isn't connected or can't open a file.
+- **OAuth (default):** reads the private sheets of the connected Google account and can list them ("Fetch from Google"). No sheet has to be shared with any email.
+- **API key (fallback):** reads sheets set to "Anyone with the link can view", added with **Add by URL** (a key can't list files: it identifies the app, not a person). It is used automatically when OAuth isn't connected or can't open a file.
 
 Step-by-step instructions are in **[docs/GOOGLE_API.md](docs/GOOGLE_API.md)**. You enter the values in **Settings → Google connection** (or with `php artisan google:configure`). They are stored **encrypted in the database**, not in `.env`. Only `APP_KEY` and the database login live in `.env`.
 
@@ -73,18 +73,20 @@ Step-by-step instructions are in **[docs/GOOGLE_API.md](docs/GOOGLE_API.md)**. Y
 ## How it works
 
 ```
-FILE (Google spreadsheet)
+SPREADSHEET (Google file)
  └── TAB
-      └── SOURCE TABLE      header row + data block (a tab can hold several)
-           ├── SOURCE COLUMNS   header, type, "compare" flag
-           ├── SOURCE RECORDS   one per sheet row: permanent ID + every value
-           └── MAPPINGS         → target table (several allowed)
-                └── MAPPING COLUMNS   sheet column → database column (price → product_price)
+      └── SHEET TABLE        header row + data block (a tab can hold several)        source_tables
+           ├── COLUMNS          header, type, "compare" flag                            source_columns
+           ├── ROWS             one per sheet row: permanent ID + every value           source_records
+           └── COLUMN MAPPING   → database table (several allowed)                       mappings
+                └── sheet column → database column (price → product_price)             mapping_columns
                                   │
                                   ▼
-                   TARGET TABLE (MySQL, created and owned by the sync)
-                   rows keyed by our row ID: id = R-101, R-102, …
+                   DATABASE TABLE (MySQL, created and owned by the sync, e.g. sales)    managed_tables
+                   our row ID + the mapped columns: id = R-101, R-102, …
 ```
+
+In the UI these are **Spreadsheets**, **Sheet tables**, **Column mappings** and **Target tables**; the right-hand column shows the database table behind each one.
 
 ### The sync
 
@@ -150,11 +152,11 @@ Changing where a column is saved is **add + stop**: the new destination is creat
 | 3 | Configuration of files, tabs, columns | DB tables `spreadsheets`, `tabs`, `source_tables`, `source_columns`, managed in the UI |
 | 4–5 | Matching file → table, renamed columns, one file → many tables | `mappings` + `mapping_columns`; [`TargetWriter`](app/Sync/TargetWriter.php) writes each mapping by our row ID (`id` = `R-101`) |
 | 6 | New config column → ALTER TABLE + store data | [`SchemaManager`](app/Sync/SchemaManager.php) + [`Backfiller`](app/Sync/Backfiller.php) |
-| 7 | Google API token instructions | [docs/GOOGLE_API.md](docs/GOOGLE_API.md) |
+| 7 | Google API token instructions | [docs/GOOGLE_API.md](docs/GOOGLE_API.md): what the tokens are (API key, OAuth access/refresh tokens), then how to create each one, step by step |
 | 8 | Repository with setup instructions | this README |
 | 9 | Laravel, MySQL | Laravel 13, MySQL 8.4 |
-| 10 | Ubuntu setup script | [`setup.sh`](setup.sh) (tested on a clean `ubuntu:24.04` container), plus the Ubuntu-based Docker image |
-| 11 | UI to manage everything | Filament admin panel at `/admin` |
+| 10 | Ubuntu setup script | [`setup.sh`](setup.sh) (tested end to end on a clean `ubuntu:24.04` container, including `--demo` and running it a second time), plus the Ubuntu-based Docker image |
+| 11 | UI to manage everything | Filament admin panel at `/admin`, with users and roles (admin, editor, viewer) and per-file access |
 
 ## Using the app
 
@@ -239,6 +241,8 @@ The full list with examples is in [docs/PLAN.md](docs/PLAN.md#12-edge-cases). Mo
 | Command | What it does |
 |---|---|
 | `php artisan sheets:sync [--file=] [--now] [--allow-mass-removal]` | Sync all (or one) spreadsheets: queued, or inline with `--now` |
+| `php artisan sheets:run-schedules` | Start the syncs whose schedule is due (run every minute by the scheduler) |
+| `php artisan sheets:export <table> [--format=xlsx\|csv\|json] [--to=path]` | Export a database table to Excel, CSV or JSON |
 | `php artisan google:configure [--client-json=path]` | Store the OAuth client and API key, encrypted (hidden input) |
 | `php artisan sheets:demo [--fresh] [--remove]` | Load the demo (into `demo_` tables), start it over, or remove it |
 | `php artisan sheets:demo-change <scenario>` | Simulate edits in the demo sheets |
@@ -250,20 +254,25 @@ The full list with examples is in [docs/PLAN.md](docs/PLAN.md#12-edge-cases). Mo
 docker compose exec app php artisan test
 ```
 
-95 Pest tests run against a separate MySQL test database:
+148 Pest tests run against a separate MySQL test database (a guard refuses to run them against any database whose name doesn't end in `_test`):
 - **unit tests** for the services that don't touch the database or Google: normalizer, locator and detector, fingerprinter, matcher;
-- **feature tests** for the whole sync engine, using an in-memory Google gateway: every edge case above, schema safety, backfill, system ID position pairing, the guards;
-- **UI tests** that render every admin screen and exercise the main actions (approve, create a mapping, save an encrypted API key with password confirmation, reject a forged OAuth callback).
+- **feature tests** for the whole sync engine, using an in-memory Google gateway: every edge case above, schema safety, backfill, system ID position pairing and rejections, the guards, minimal target tables, schedules (times, weekdays, timezones), exports;
+- **UI tests** that render every admin screen and exercise the main actions: the sheet table wizard (new and existing tables), mappings, approving, saving an encrypted API key with password confirmation, rejecting a forged OAuth callback, removing empty columns and tables, loading and removing the demo, and **roles** (what editors and viewers can and can't see or do).
 
 ## Project structure
 
 ```
-app/Google/            SheetsGateway (real Google + in-memory), credentials (OAuth → API key fallback), importer
+app/Google/            SheetsGateway (Google, in-memory, and the router that sends demo-… files to JSON),
+                       credentials (OAuth → API key fallback), importer
 app/Sync/              the engine: TableLocator, StructureInspector, ValueNormalizer, Fingerprinter,
                        RecordMatcher, SheetReader, ChangeSetBuilder, ChangeApplier, TargetWriter,
                        SchemaManager, Backfiller, SyncRunner
 app/Filament/          admin panel (resources, Google connection page, dashboard widget)
-app/Http/Controllers/  GoogleOAuthController (consent redirect + callback)
+app/Exports/           TableExporter (Excel, CSV, JSON)
+app/Demo/              DemoData (load / remove the demo, kept apart in demo_ tables)
+app/Support/Access.php who can see what (users only see their spreadsheets and their rows)
+app/Policies/          permissions per role (admin, editor, viewer)
+app/Http/              GoogleOAuthController (consent redirect + callback), user timezone middleware
 database/demo/         demo spreadsheets (JSON)
 docker/                Ubuntu image, nginx, supervisor, entrypoint
 setup.sh               Ubuntu server setup
