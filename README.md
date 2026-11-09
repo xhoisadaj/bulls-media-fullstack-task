@@ -14,7 +14,7 @@ Built with **Laravel 13, MySQL 8, Filament 5** and the official **Google API cli
 - [Edge cases](#edge-cases)
 - [Commands](#commands)
 - [Tests](#tests)
-- [Design decisions](docs/DECISIONS.md) and the full [plan](docs/PLAN.md)
+- [Design decisions](docs/DECISIONS.md)
 
 ---
 
@@ -211,7 +211,7 @@ php artisan sheets:sync --now
 
 ## Edge cases
 
-The full list with examples is in [docs/PLAN.md](docs/PLAN.md#12-edge-cases). Most are covered by tests:
+Most are covered by tests:
 
 - **Sheet structure**
   - Headers not at A1, or moved after rows were inserted
@@ -277,5 +277,5 @@ app/Http/              GoogleOAuthController (consent redirect + callback), user
 database/demo/         demo spreadsheets (JSON)
 docker/                Ubuntu image, nginx, supervisor, entrypoint
 setup.sh               Ubuntu server setup
-docs/                  GOOGLE_API.md, DECISIONS.md, PLAN.md
+docs/                  GOOGLE_API.md, DECISIONS.md
 ```

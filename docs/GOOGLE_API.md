@@ -34,40 +34,60 @@ With both set, OAuth is used first. The API key is used automatically when OAuth
 
 ## Step 1: Create a project and enable the APIs (both options)
 
-1. Open <https://console.cloud.google.com> and sign in.
-2. In the project picker at the top, click **New project**, name it (e.g. `sheets-sync`), and click **Create**. Make sure it's selected.
-3. Go to **APIs & Services → Library** and enable:
-   - **Google Sheets API** (needed for both options)
-   - **Google Drive API** (only for OAuth, so "Fetch from Google" can list your spreadsheets)
+1. Open <https://console.cloud.google.com> and sign in. Click the project picker at the top, then **New project**.
+
+2. Name the project (e.g. `sheets-sync`), leave **No organization**, and click **Create**.
+
+3. Make sure the new project is selected at the top, then open **APIs & Services**.
+
+4. Go to **Library**.
+
+5. Search for **Google Drive API** and click **Enable** (only needed for OAuth, so "Fetch from Google" can list your spreadsheets).
+
+6. Search for **Google Sheets API** and click **Enable** (needed for both options).
+
+   The status now shows **Enabled**.
 
 ## Option A: OAuth client
 
 ### A1. Consent screen
 
 1. Go to **Google Auth Platform** (older consoles: **APIs & Services → OAuth consent screen**) and click **Get started**.
-2. **App information:** app name `Sheets Sync`, and your email as the support email.
-3. **Audience:** choose **External** (or Internal if you use Google Workspace and only need your organization).
-4. **Contact information:** your email. Then accept and create.
-5. **Audience → Test users → Add users:** add the Google account(s) that will connect. While the app is in *Testing*, only test users can sign in.
-6. **Data access → Add or remove scopes** (optional in Testing, but it makes the consent screen clearer). The app requests:
+
+2. **App information:** app name (e.g. `Sheets Sync`) and your email as the user support email. Click **Next**.
+
+3. **Audience:** choose **External** (or **Internal** if you use Google Workspace and only need your organization). Click **Next**.
+
+4. **Contact information:** your email. Click **Next**.
+
+5. **Finish:** tick **I agree to the Google API Services: User Data Policy**, click **Continue**, then **Create**.
+
+6. Go to **Audience**. Under **Test users**, click **Add users**.
+
+7. Add the Google account(s) that will connect (your own email) and click **Save**. While the app is in *Testing*, only test users can sign in; others get "Access blocked".
+
+8. Optional: **Data access → Add or remove scopes** makes the consent screen clearer. The app requests:
    - `https://www.googleapis.com/auth/spreadsheets.readonly`: read sheets
    - `https://www.googleapis.com/auth/drive.metadata.readonly`: list your spreadsheets
    - `openid`, `email`: show which account is connected
 
 ### A2. OAuth client ID
 
-1. Go to **Google Auth Platform → Clients** (older consoles: **APIs & Services → Credentials → Create credentials → OAuth client ID**).
-2. Click **Create client**, application type **Web application**, name `Sheets Sync`.
+1. Go to **Clients** (older consoles: **APIs & Services → Credentials → Create credentials → OAuth client ID**) and click **Create client**.
+
+2. Choose application type **Web application** and give it a name.
+
 3. Under **Authorized redirect URIs**, click **Add URI** and paste the redirect URI shown in **Settings → Google connection**. It is your app URL followed by `/google/callback`:
    - Docker: `http://localhost:8000/google/callback`
    - `setup.sh`: printed at the end, e.g. `http://203.0.113.10/google/callback`
 
-   It must match exactly (scheme, host, port, path). Changes can take a few minutes to apply.
-4. Click **Create**, then **Download JSON**, or copy the **Client ID** and **Client secret**. Keep the secret private: don't commit it, email it or paste it into chats. If it leaks, open the client, click **Add secret**, and delete the old one.
+   It must match exactly (scheme, host, port, path). Then click **Create**. Changes can take a few minutes to apply.
+
+4. Google shows the new client: either copy the **Client ID** and **Client secret**, or click **Download JSON**. You'll paste them into the app in the next step. Keep the secret private: don't commit it, email it or paste it into chats. If it leaks, open the client, click **Add secret**, and delete the old one.
 
 ### A3. Connect
 
-1. In the admin panel: **Settings → Google connection → Set OAuth client**. Paste the downloaded JSON (the app reads the ID and secret, and warns if the redirect URI isn't registered on the client), or fill in the client ID and secret. Confirm with your password.
+1. In the admin panel: **Settings → Google connection → Set OAuth client**. Paste the downloaded JSON (the client ID and secret are filled in for you, and the app warns if the redirect URI isn't registered on the client), or paste the client ID and secret yourself. Confirm with your password.
 2. Click **Connect Google account**, choose a test user, and click **Allow**. You're sent back to the settings page with the status **Connected**.
 
 From the terminal instead: `php artisan google:configure --client-json=/path/to/client.json`, then connect in the panel. The consent step needs a browser.
