@@ -378,6 +378,32 @@ it('treats a rejected position pairing as removed plus new on the next sync', fu
         ->and(PendingChange::query()->pending()->sole()->type->value)->toBe('removed');
 });
 
+it('does not pair a rejected row again when the sheet row is edited once more', function () {
+    $fixture = SyncFixture::make(
+        [['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Ana', 'Durres', 35], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 50]],
+        ['name' => ColumnType::String, 'city' => ColumnType::String, 'amount' => ColumnType::Integer],
+        ['name' => 'name', 'city' => 'city', 'amount' => 'amount'],
+        target: 'people',
+        mode: IdentityMode::SystemId,
+        apply: ApplyMode::Review,
+    );
+    syncNow($fixture);
+    $anaId = DB::table('people')->where('name', 'Ana')->value('id');
+
+    $fixture->sheet([['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Ana', 'Durres', 40], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 50]]);
+    syncNow($fixture);
+    app(ChangeApplier::class)->reject(PendingChange::query()->pending()->sole(), User::factory()->create());
+
+    $fixture->sheet([['name', 'city', 'amount'], ['Xhoi', 'Tirana', 20], ['Ana', 'Durres', 45], ['Ben', 'Vlore', 15], ['Mira', 'Shkoder', 50]]);
+    $run = syncNow($fixture);
+    $pending = PendingChange::query()->pending()->get();
+
+    expect($run->counts)->toMatchArray(['modified' => 0, 'removed' => 1, 'new' => 1])
+        ->and($pending->pluck('type')->map->value->sort()->values()->all())->toBe(['new', 'removed'])
+        ->and(SourceRecord::codeFor($pending->firstWhere('type', ChangeType::Removed)->source_record_id))->toBe($anaId)
+        ->and(DB::table('people')->where('id', $anaId)->value('amount'))->toBe(35);
+});
+
 it('fails one file cleanly without touching data when it becomes inaccessible', function () {
     $fixture = keyFixture([[1001, 'Shoes', 50, 2]]);
     syncNow($fixture);

@@ -30,7 +30,7 @@ class ChangeSetBuilder
         $outcome = new ChangeSetOutcome;
         $records = $table->records()->get()->keyBy('id');
         $trackedIds = $table->trackedColumns()->pluck('id')->all();
-        $this->unpairRejected($table, $match);
+        $this->unpairRejected($table, $match, $records);
 
         $removable = collect($match->removed)->reject(fn (int $id) => $records[$id]?->keep_on_removal)->values();
         $activeCount = $records->whereNull('removed_at')->count();
@@ -104,12 +104,15 @@ class ChangeSetBuilder
     }
 
     /**
-     * A position pairing the admin rejected ("not the same row") falls back to removed + new,
-     * so the row isn't stuck between the two.
+     * Rejecting a position pairing means "this sheet row is not that record". It falls back to
+     * removed + new, and the record isn't paired by position again (whatever the sheet row is edited
+     * to next), until the record itself changes through an approved change.
+     *
+     * @param  Collection<int, SourceRecord>  $records
      */
-    private function unpairRejected(SourceTable $table, MatchResult $match): void
+    private function unpairRejected(SourceTable $table, MatchResult $match, Collection $records): void
     {
-        $match->modified = array_values(array_filter($match->modified, function (array $pair) use ($table, $match): bool {
+        $match->modified = array_values(array_filter($match->modified, function (array $pair) use ($table, $match, $records): bool {
             if (($pair['by'] ?? null) === null) {
                 return true;
             }
@@ -118,8 +121,9 @@ class ChangeSetBuilder
                 ->where('source_table_id', $table->id)
                 ->where('status', ChangeStatus::Rejected)
                 ->where('type', ChangeType::Modified)
+                ->where('matched_by', RecordMatcher::BY_POSITION)
                 ->where('source_record_id', $pair['record'])
-                ->where('fingerprint', $pair['row']->fingerprint)
+                ->where('decided_at', '>=', $records[$pair['record']]?->updated_at ?? now()->subCentury())
                 ->exists();
 
             if ($rejected) {
