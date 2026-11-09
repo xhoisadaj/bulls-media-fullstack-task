@@ -34,17 +34,29 @@ With both set, OAuth is used first. The API key is used automatically when OAuth
 
 ## Step 1: Create a project and enable the APIs (both options)
 
-1. Open <https://console.cloud.google.com> and sign in. Click the project picker at the top, then **New project**.
+1. Open <https://console.cloud.google.com> and sign in. Click the project picker at the top ("Select a project"), then **New project**.
 
 2. Name the project (e.g. `sheets-sync`), leave **No organization**, and click **Create**.
 
+   ![New Project form with the project name](images/google-setup/01-new-project.png)
+
 3. Make sure the new project is selected at the top, then open **APIs & Services**.
+
+   ![The new project selected, with APIs & Services under Quick access](images/google-setup/02-project-created.png)
 
 4. Go to **Library**.
 
+   ![APIs & Services with Library in the menu](images/google-setup/03-apis-and-services.png)
+
+   ![The API Library with its search box](images/google-setup/04-api-library.png)
+
 5. Search for **Google Drive API** and click **Enable** (only needed for OAuth, so "Fetch from Google" can list your spreadsheets).
 
+   ![Google Drive API with the Enable button](images/google-setup/05-enable-drive-api.png)
+
 6. Search for **Google Sheets API** and click **Enable** (needed for both options).
+
+   ![Google Sheets API with the Enable button](images/google-setup/06-enable-sheets-api.png)
 
    The status now shows **Enabled**.
 
@@ -54,17 +66,31 @@ With both set, OAuth is used first. The API key is used automatically when OAuth
 
 1. Go to **Google Auth Platform** (older consoles: **APIs & Services → OAuth consent screen**) and click **Get started**.
 
+   ![Google Auth Platform not configured yet, with Get started](images/google-setup/07-oauth-get-started.png)
+
 2. **App information:** app name (e.g. `Sheets Sync`) and your email as the user support email. Click **Next**.
+
+   ![App information step](images/google-setup/08-app-information.png)
 
 3. **Audience:** choose **External** (or **Internal** if you use Google Workspace and only need your organization). Click **Next**.
 
+   ![Audience step with External selected](images/google-setup/09-audience-external.png)
+
 4. **Contact information:** your email. Click **Next**.
+
+   ![Contact information step](images/google-setup/10-contact-information.png)
 
 5. **Finish:** tick **I agree to the Google API Services: User Data Policy**, click **Continue**, then **Create**.
 
+   ![Finish step with the policy accepted](images/google-setup/11-finish-and-create.png)
+
 6. Go to **Audience**. Under **Test users**, click **Add users**.
 
+   ![Audience page with Test users and Add users](images/google-setup/12-audience-test-users.png)
+
 7. Add the Google account(s) that will connect (your own email) and click **Save**. While the app is in *Testing*, only test users can sign in; others get "Access blocked".
+
+   ![Your email listed under Test users](images/google-setup/13-test-user-added.png)
 
 8. Optional: **Data access → Add or remove scopes** makes the consent screen clearer. The app requests:
    - `https://www.googleapis.com/auth/spreadsheets.readonly`: read sheets
@@ -75,13 +101,19 @@ With both set, OAuth is used first. The API key is used automatically when OAuth
 
 1. Go to **Clients** (older consoles: **APIs & Services → Credentials → Create credentials → OAuth client ID**) and click **Create client**.
 
+   ![Clients page with Create client](images/google-setup/14-clients.png)
+
 2. Choose application type **Web application** and give it a name.
+
+   ![Create OAuth client ID with Web application selected](images/google-setup/15-web-application.png)
 
 3. Under **Authorized redirect URIs**, click **Add URI** and paste the redirect URI shown in **Settings → Google connection**. It is your app URL followed by `/google/callback`:
    - Docker: `http://localhost:8000/google/callback`
    - `setup.sh`: printed at the end, e.g. `http://203.0.113.10/google/callback`
 
    It must match exactly (scheme, host, port, path). Then click **Create**. Changes can take a few minutes to apply.
+
+   ![Authorized redirect URI http://localhost:8000/google/callback and the Create button](images/google-setup/16-redirect-uri.png)
 
 4. Google shows the new client: either copy the **Client ID** and **Client secret**, or click **Download JSON**. You'll paste them into the app in the next step. Keep the secret private: don't commit it, email it or paste it into chats. If it leaks, open the client, click **Add secret**, and delete the old one.
 
