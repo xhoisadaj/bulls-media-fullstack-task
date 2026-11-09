@@ -38,6 +38,8 @@ class ListSpreadsheets extends ListRecords
         return [
             ActionGroup::make([
                 Action::make('loadDemo')
+                    // Creates and drops the demo_ tables (DDL): no transaction.
+                    ->databaseTransaction(false)
                     ->label(fn (): string => DemoData::isLoaded() ? 'Reload demo data' : 'Load demo data')
                     ->icon(Heroicon::OutlinedBeaker)
                     ->requiresConfirmation()
@@ -49,6 +51,8 @@ class ListSpreadsheets extends ListRecords
                         Notification::make()->title('Demo data loaded')->body(count($results).' demo spreadsheets synced into demo_sales, demo_customers and demo_returns.')->success()->send();
                     }),
                 Action::make('removeDemo')
+                    // Creates and drops the demo_ tables (DDL): no transaction.
+                    ->databaseTransaction(false)
                     ->label('Remove demo data')
                     ->icon(Heroicon::OutlinedTrash)
                     ->color('danger')

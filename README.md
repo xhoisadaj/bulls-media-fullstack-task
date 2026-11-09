@@ -254,9 +254,10 @@ The full list with examples is in [docs/PLAN.md](docs/PLAN.md#12-edge-cases). Mo
 docker compose exec app php artisan test
 ```
 
-148 Pest tests run against a separate MySQL test database (a guard refuses to run them against any database whose name doesn't end in `_test`):
+152 Pest tests run against a separate MySQL test database (a guard refuses to run them against any database whose name doesn't end in `_test`):
 - **unit tests** for the services that don't touch the database or Google: normalizer, locator and detector, fingerprinter, matcher;
 - **feature tests** for the whole sync engine, using an in-memory Google gateway: every edge case above, schema safety, backfill, system ID position pairing and rejections, the guards, minimal target tables, schedules (times, weekdays, timezones), exports;
+- **transaction tests** that force a failure halfway through a save (a user, a mapping, the wizard, a backfill) and check that nothing partial was saved;
 - **UI tests** that render every admin screen and exercise the main actions: the sheet table wizard (new and existing tables), mappings, approving, saving an encrypted API key with password confirmation, rejecting a forged OAuth callback, removing empty columns and tables, loading and removing the demo, and **roles** (what editors and viewers can and can't see or do).
 
 ## Project structure

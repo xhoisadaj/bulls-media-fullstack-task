@@ -94,6 +94,19 @@ Access follows the files: a user sees a spreadsheet and everything that belongs 
 
 I deliberately kept **one Google connection, set by the admin**, instead of letting each user connect their own account. Per-user connections would need a credential per file (and a rule for which one wins when two users connect the same file), files would stop syncing when that user's token expires or they leave, and in Google's "Testing" mode every user must be added as a test user and reconnect weekly. For the goal ("the admin decides which files a user sees"), sharing inside the app gives the same result with none of those failure modes.
 
+## 12. Validation and transactions
+
+**Validation happens on the server.** Every form value is validated by Laravel before it is used (required fields, formats, unique email, allowed options, table and column names), mapping plans are checked before anything is saved (`validatePlan`), and permissions are checked on every request. Sheet values go through the `ValueNormalizer` (types, lengths, formula errors) before they are stored, and MySQL runs in strict mode with foreign keys and unique indexes as the last line of defence.
+
+**Writes are atomic.**
+- Every form save and button in the admin runs in **one database transaction** (Filament's panel-wide setting): a user and their spreadsheets, a mapping and its columns, a sheet table and everything the wizard creates are saved completely or not at all.
+- Approving or rejecting a change is its own transaction with a row lock, so two people can't approve the same change twice.
+- A backfill (after a mapping or column change) rewrites the stored rows and the database table in one transaction per sheet table.
+- **Schema changes are the exception, by necessity:** MySQL commits implicitly on `CREATE/ALTER/DROP TABLE`, so they can't be rolled back. They are validated first and run **right after the data is committed** (`DB::afterCommit`), or in the few admin actions that only change structure (add/remove column, delete table, load/remove demo), which opt out of the transaction explicitly.
+- A sync is deliberately not one big transaction: each change is atomic on its own, a broken table doesn't roll back the others, and running a sync again is always safe.
+
+Tests force failures halfway (a user's spreadsheets, a mapping's second column, the wizard, a backfill) and check that nothing partial was saved.
+
 ## Out of scope (future work)
 
 - Similarity matching (rejected on purpose, see §3)

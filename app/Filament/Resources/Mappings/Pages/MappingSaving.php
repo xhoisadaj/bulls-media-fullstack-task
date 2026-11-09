@@ -10,7 +10,7 @@ use App\Sync\Backfiller;
 use App\Sync\SchemaException;
 use App\Sync\SchemaManager;
 use Filament\Notifications\Notification;
-use Filament\Support\Exceptions\Halt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -49,24 +49,32 @@ trait MappingSaving
         }
     }
 
+    /**
+     * Runs once the mapping is committed: the schema change (ALTER/CREATE TABLE commits implicitly
+     * in MySQL, so it can't be inside the form's transaction), then the backfill in its own transaction.
+     * The plan was validated before saving, so the schema change is not expected to fail here.
+     */
     protected function applySchemaAndBackfill(Mapping $mapping): void
     {
+        $trackedBefore = $this->trackedBefore;
 
-        try {
-            $changes = app(SchemaManager::class)->apply($mapping->refresh());
-        } catch (SchemaException $e) {
-            Notification::make()->title('The database was not changed')->body(implode(' ', $e->errors))->danger()->persistent()->send();
+        DB::afterCommit(function () use ($mapping, $trackedBefore): void {
+            try {
+                $changes = app(SchemaManager::class)->apply($mapping->refresh());
+            } catch (SchemaException $e) {
+                Notification::make()->title('The mapping was saved, but the database was not changed')->body(implode(' ', $e->errors))->danger()->persistent()->send();
 
-            throw new Halt;
-        }
+                return;
+            }
 
-        $messages = app(Backfiller::class)->afterConfigChange($mapping->sourceTable->refresh(), $this->trackedBefore);
+            $messages = app(Backfiller::class)->afterConfigChange($mapping->sourceTable->refresh(), $trackedBefore);
 
-        Notification::make()
-            ->title('Mapping saved')
-            ->body(implode(' ', [...$changes, ...$messages]) ?: 'No database changes were needed.')
-            ->success()
-            ->persistent()
-            ->send();
+            Notification::make()
+                ->title('Mapping saved')
+                ->body(implode(' ', [...$changes, ...$messages]) ?: 'No database changes were needed.')
+                ->success()
+                ->persistent()
+                ->send();
+        });
     }
 }

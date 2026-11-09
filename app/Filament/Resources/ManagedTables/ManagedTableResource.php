@@ -90,6 +90,8 @@ class ManagedTableResource extends Resource
             ])
             ->toolbarActions([
                 BulkAction::make('deleteEmptyTables')
+            // Changes the table structure (DDL commits implicitly in MySQL): validated first, no transaction.
+                    ->databaseTransaction(false)
                     ->authorize(fn (): bool => Access::isAdmin())
                     ->label('Delete selected empty tables')
                     ->icon(Heroicon::OutlinedTrash)
@@ -110,6 +112,8 @@ class ManagedTableResource extends Resource
     private static function addColumnAction(): Action
     {
         return Action::make('addColumn')
+            // Changes the table structure (DDL commits implicitly in MySQL): validated first, no transaction.
+            ->databaseTransaction(false)
             ->authorize(fn (): bool => Access::isAdmin())
             ->label('Add column')
             ->icon(Heroicon::OutlinedPlusCircle)
@@ -139,6 +143,8 @@ class ManagedTableResource extends Resource
     private static function removeColumnsAction(): Action
     {
         return Action::make('removeColumns')
+            // Changes the table structure (DDL commits implicitly in MySQL): validated first, no transaction.
+            ->databaseTransaction(false)
             ->authorize(fn (): bool => Access::isAdmin())
             ->label('Remove columns')
             ->icon(Heroicon::OutlinedMinusCircle)
@@ -174,6 +180,8 @@ class ManagedTableResource extends Resource
     private static function deleteTableAction(): Action
     {
         return Action::make('deleteTable')
+            // Changes the table structure (DDL commits implicitly in MySQL): validated first, no transaction.
+            ->databaseTransaction(false)
             ->authorize(fn (): bool => Access::isAdmin())
             ->label('Delete table')
             ->icon(Heroicon::OutlinedTrash)

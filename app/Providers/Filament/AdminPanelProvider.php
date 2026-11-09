@@ -41,6 +41,10 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Settings'),
             ])
             ->maxContentWidth(Width::Full)
+            // Every form save and button runs in one database transaction: all or nothing.
+            // Schema changes (ALTER/CREATE/DROP TABLE) commit implicitly in MySQL, so they run
+            // right after the commit (DB::afterCommit) or in actions that opt out explicitly.
+            ->databaseTransactions()
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => view('filament.styles'))
             ->renderHook(PanelsRenderHook::PAGE_START, fn () => view('filament.attention-banner'))
             ->databaseNotifications()

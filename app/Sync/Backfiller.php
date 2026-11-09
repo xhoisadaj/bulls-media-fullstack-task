@@ -8,6 +8,7 @@ use App\Google\Exceptions\GoogleAccessException;
 use App\Models\SourceRecord;
 use App\Models\SourceTable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Brings existing data up to date after a configuration change (new or remapped column,
@@ -27,6 +28,16 @@ class Backfiller
      * @return list<string> messages for the admin
      */
     public function afterConfigChange(SourceTable $table, array $previousTrackedIds, bool $refreshFromSheet = true): array
+    {
+        // All or nothing: a failure halfway leaves the stored rows and the target tables as they were.
+        return DB::transaction(fn (): array => $this->applyConfigChange($table, $previousTrackedIds, $refreshFromSheet));
+    }
+
+    /**
+     * @param  list<int>  $previousTrackedIds
+     * @return list<string>
+     */
+    private function applyConfigChange(SourceTable $table, array $previousTrackedIds, bool $refreshFromSheet): array
     {
         $messages = [];
         $superseded = $table->pendingChanges()->pending()->update(['status' => ChangeStatus::Superseded]);

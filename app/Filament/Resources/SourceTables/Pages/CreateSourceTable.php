@@ -355,9 +355,12 @@ class CreateSourceTable extends CreateRecord
             return $mapping;
         });
 
-        // DDL commits implicitly in MySQL, so the schema is changed after the data transaction.
-        app(SchemaManager::class)->apply($mapping);
-        SyncSpreadsheetJob::start($mapping->sourceTable->tab->spreadsheet, TriggerType::Manual);
+        // DDL commits implicitly in MySQL, so the schema is changed once the data is committed,
+        // then the first sync starts.
+        DB::afterCommit(function () use ($mapping): void {
+            app(SchemaManager::class)->apply($mapping);
+            SyncSpreadsheetJob::start($mapping->sourceTable->tab->spreadsheet, TriggerType::Manual);
+        });
 
         return $mapping->sourceTable;
     }
