@@ -225,6 +225,6 @@ else
   printf '  Login:         %s (existing account, password unchanged)\n' "$ADMIN_EMAIL"
 fi
 printf '  Redirect URI:  %s/google/callback   (register it on your Google OAuth client)\n' "$APP_URL"
-printf '  Daily sync:    %s (server time), plus "Sync now" in the panel\n\n' "$(get_env SYNC_DAILY_AT | grep . || echo 02:00)"
+printf '  Sync:          every day at %s UTC by default (Activity → Sync schedules), plus "Sync now" in the panel\n\n' "$(get_env SYNC_DAILY_AT | grep . || echo 02:00)"
 printf 'Next: follow docs/GOOGLE_API.md, then enter the credentials in Settings → Google connection\n'
 printf '      (or run: sudo -u www-data php artisan google:configure).\n'
