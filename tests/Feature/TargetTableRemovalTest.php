@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\ColumnType;
+use App\Exports\TableExporter;
+use App\Filament\Resources\ManagedTables\Pages\BrowseManagedTable;
 use App\Filament\Resources\ManagedTables\Pages\ListManagedTables;
 use App\Models\ManagedTable;
 use App\Models\User;
@@ -121,4 +123,33 @@ it('adds an empty column with any name and type, and rejects reserved or existin
         ->and($table->history()->where('action', 'add_column')->value('column_name'))->toBe('discount')
         ->and(fn () => app(SchemaManager::class)->addEmptyColumn($table, 'note', ColumnType::String))->toThrow(SchemaException::class)
         ->and(fn () => app(SchemaManager::class)->addEmptyColumn($table, 'id', ColumnType::String))->toThrow(SchemaException::class);
+});
+
+it('exports a target table to csv, json and excel with numbers as numbers', function () {
+    $table = targetTable('tmp_orders', ['name']);
+    Schema::table('tmp_orders', fn ($t) => $t->decimal('price', 15, 2)->nullable());
+    DB::table('tmp_orders')->insert([['id' => 'R-102', 'name' => 'Bag', 'price' => 35], ['id' => 'R-101', 'name' => 'Shoes', 'price' => 1000.5]]);
+    $exporter = app(TableExporter::class);
+
+    $csv = file($exporter->export($table, 'csv'), FILE_IGNORE_NEW_LINES);
+    $json = json_decode(file_get_contents($exporter->export($table, 'json')), true);
+    $xlsx = $exporter->export($table, 'xlsx');
+
+    expect($csv[0])->toContain('id')->toContain('name')->toContain('price')
+        ->and($csv[1])->toStartWith('R-101')
+        ->and($json)->toBe([['id' => 'R-101', 'name' => 'Shoes', 'price' => 1000.5], ['id' => 'R-102', 'name' => 'Bag', 'price' => 35.0]])
+        ->and(filesize($xlsx))->toBeGreaterThan(0)
+        ->and(file_get_contents($xlsx, length: 2))->toBe('PK');
+
+    $this->artisan('sheets:export', ['table' => 'tmp_orders', '--format' => 'json'])->assertSuccessful();
+    $this->artisan('sheets:export', ['table' => 'nope'])->assertFailed();
+});
+
+it('downloads an export from the table data page', function () {
+    $table = targetTable('tmp_orders', ['name']);
+    DB::table('tmp_orders')->insert(['id' => 'R-101', 'name' => 'Shoes']);
+
+    Livewire::test(BrowseManagedTable::class, ['record' => $table->getRouteKey()])
+        ->callAction('export_csv')
+        ->assertFileDownloaded();
 });

@@ -2,12 +2,16 @@
 
 namespace App\Filament\Resources\ManagedTables\Pages;
 
+use App\Exports\TableExporter;
 use App\Filament\Resources\ManagedTables\ManagedTableResource;
 use App\Models\ManagedTable;
 use App\Models\SourceRecord;
 use App\Models\SourceTable;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
 use Filament\Resources\Pages\Page;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -55,6 +59,31 @@ class BrowseManagedTable extends Page implements HasTable
 
         return $record->mappings()->with('sourceTable.tab.spreadsheet')->get()
             ->contains(fn ($mapping) => $mapping->sourceTable?->tab?->spreadsheet?->isSyncing());
+    }
+
+    protected function getHeaderActions(): array
+    {
+        /** @var ManagedTable $record */
+        $record = $this->getRecord();
+
+        return [
+            ActionGroup::make(array_map(
+                fn (string $format, string $label) => Action::make('export_'.$format)
+                    ->label($label)
+                    ->action(function () use ($record, $format) {
+                        $source = $this->tableFilters['source']['value'] ?? null;
+                        $path = app(TableExporter::class)->export($record, $format, filled($source) ? (int) $source : null);
+
+                        return response()->download($path)->deleteFileAfterSend();
+                    }),
+                array_keys(TableExporter::FORMATS),
+                TableExporter::FORMATS,
+            ))
+                ->label('Export')
+                ->icon(Heroicon::OutlinedArrowDownTray)
+                ->button()
+                ->tooltip('Downloads all rows, or only the rows of the file chosen in the "From file" filter.'),
+        ];
     }
 
     public function getSubheading(): string|Htmlable|null
