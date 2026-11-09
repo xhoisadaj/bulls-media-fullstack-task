@@ -32,7 +32,7 @@ beforeEach(function () {
 
     $this->london = Spreadsheet::query()->where('google_id', 'demo-shop-london')->first();
     $this->paris = Spreadsheet::query()->where('google_id', 'demo-shop-paris')->first();
-    $this->sales = ManagedTable::query()->where('name', 'sales')->first();
+    $this->sales = ManagedTable::query()->where('name', 'demo_sales')->first();
 });
 
 afterEach(function () {

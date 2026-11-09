@@ -100,25 +100,6 @@ class GoogleConnection extends Page
                     ]),
                 ]),
 
-            Section::make('Demo data')
-                ->description('Explore the app without any Google account: spreadsheets are read from JSON files in storage/app/demo. Run "php artisan sheets:demo" to load the demo setup.')
-                ->schema([
-                    TextEntry::make('demo')->label('Demo mode')->badge()
-                        ->state($settings->use_demo_data ? 'On' : 'Off')
-                        ->color($settings->use_demo_data ? 'warning' : 'gray'),
-                    Actions::make([
-                        Action::make('toggleDemo')
-                            ->label($settings->use_demo_data ? 'Turn demo mode off (use Google)' : 'Turn demo mode on')
-                            ->color('gray')
-                            ->requiresConfirmation()
-                            ->action(function () use ($settings) {
-                                $settings->update(['use_demo_data' => ! $settings->use_demo_data]);
-                                Notification::make()->title('Demo mode '.($settings->use_demo_data ? 'on' : 'off'))->success()->send();
-                                $this->reloadPage();
-                            }),
-                    ]),
-                ]),
-
             Section::make('Recent credential changes')
                 ->description('Who changed which credential and when. Values are never stored here.')
                 ->collapsible()
@@ -252,7 +233,6 @@ class GoogleConnection extends Page
     private function currentlyUsing(GoogleSetting $settings): string
     {
         return match (true) {
-            $settings->use_demo_data => 'Demo data',
             $settings->oauth_status === ConnectionStatus::Connected => 'OAuth',
             $settings->secret('api_key') !== null => 'API key (fallback)',
             default => 'Nothing yet',

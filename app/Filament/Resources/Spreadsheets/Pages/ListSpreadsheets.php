@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Spreadsheets\Pages;
 
+use App\Demo\DemoData;
 use App\Enums\TriggerType;
 use App\Filament\Resources\Spreadsheets\SpreadsheetResource;
 use App\Google\A1;
@@ -13,6 +14,7 @@ use App\Models\GoogleSetting;
 use App\Models\Spreadsheet;
 use App\Support\Access;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -28,12 +30,42 @@ class ListSpreadsheets extends ListRecords
     {
         $settings = GoogleSetting::current();
 
-        return $settings->use_demo_data || $settings->secret('refresh_token') !== null;
+        return $settings->secret('refresh_token') !== null;
     }
 
     protected function getHeaderActions(): array
     {
         return [
+            ActionGroup::make([
+                Action::make('loadDemo')
+                    ->label(fn (): string => DemoData::isLoaded() ? 'Reload demo data' : 'Load demo data')
+                    ->icon(Heroicon::OutlinedBeaker)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (): string => DemoData::isLoaded() ? 'Reload the demo data' : 'Load the demo data')
+                    ->modalDescription('Adds 3 example spreadsheets (Shop London, Shop Paris, Online Orders) read from JSON files, no Google account needed, synced into demo_sales, demo_customers and demo_returns. Your own spreadsheets and tables are not touched. Reloading starts the demo over.')
+                    ->authorize(fn (): bool => Access::isAdmin())
+                    ->action(function () {
+                        $results = app(DemoData::class)->load();
+                        Notification::make()->title('Demo data loaded')->body(count($results).' demo spreadsheets synced into demo_sales, demo_customers and demo_returns.')->success()->send();
+                    }),
+                Action::make('removeDemo')
+                    ->label('Remove demo data')
+                    ->icon(Heroicon::OutlinedTrash)
+                    ->color('danger')
+                    ->visible(fn (): bool => DemoData::isLoaded())
+                    ->requiresConfirmation()
+                    ->modalDescription('Deletes the 3 demo spreadsheets with their sheet tables, mappings, changes and history, and drops the demo_ tables. Your own spreadsheets and tables are not touched.')
+                    ->authorize(fn (): bool => Access::isAdmin())
+                    ->action(function () {
+                        $removed = app(DemoData::class)->remove();
+                        Notification::make()->title('Demo data removed')->body('Removed '.$removed['spreadsheets'].' spreadsheet(s) and the tables '.(implode(', ', $removed['tables']) ?: 'none').'.')->success()->send();
+                    }),
+            ])
+                ->label('Demo data')
+                ->icon(Heroicon::OutlinedBeaker)
+                ->color('gray')
+                ->button()
+                ->visible(fn (): bool => Access::isAdmin()),
             Action::make('syncAll')
                 ->label('Sync all')
                 ->icon(Heroicon::OutlinedArrowPath)

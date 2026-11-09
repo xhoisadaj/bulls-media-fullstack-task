@@ -66,13 +66,13 @@ it('renders every admin screen with the demo data', function (string $page, ?Clo
     'alerts' => [ListStructureAlerts::class],
     'sync history' => [ListSyncRuns::class],
     'target tables' => [ListManagedTables::class],
-    'browse sales' => [BrowseManagedTable::class, fn () => ['record' => ManagedTable::query()->where('name', 'sales')->first()->getRouteKey()]],
+    'browse sales' => [BrowseManagedTable::class, fn () => ['record' => ManagedTable::query()->where('name', 'demo_sales')->first()->getRouteKey()]],
     'google connection' => [GoogleConnection::class],
 ]);
 
 it('imports the demo right away and approves later changes from the review inbox', function () {
     expect(PendingChange::query()->pending()->count())->toBe(0)
-        ->and(DB::table('sales')->count())->toBe(6 + 4 + 3);
+        ->and(DB::table('demo_sales')->count())->toBe(6 + 4 + 3);
 
     Artisan::call('sheets:demo-change', ['scenario' => 'delete']);
     app()->forgetScopedInstances();
@@ -84,7 +84,7 @@ it('imports the demo right away and approves later changes from the review inbox
     Livewire::test(ListPendingChanges::class)->callAction('approveAll');
 
     expect(PendingChange::query()->pending()->count())->toBe(0)
-        ->and(DB::table('sales')->count())->toBe(6 + 4 + 3 - 1);
+        ->and(DB::table('demo_sales')->count())->toBe(6 + 4 + 3 - 1);
 });
 
 it('creates a mapping into a new table and backfills it', function () {
@@ -172,31 +172,31 @@ it('rejects an OAuth callback whose state does not match', function () {
 it('maps a second file into an existing table by picking its columns', function () {
     $paris = SourceTable::query()->where('name', 'Paris orders')->first();
     $returns = SourceTable::query()->where('name', 'Returns')->first();
-    $sales = ManagedTable::query()->where('name', 'sales')->first();
+    $sales = ManagedTable::query()->where('name', 'demo_sales')->first();
 
-    $matched = MappingForm::mapMatching('sales', $paris->id, []);
+    $matched = MappingForm::mapMatching('demo_sales', $paris->id, []);
     $targets = collect($matched['columns'])->pluck('target_column')->all();
 
     expect($matched['count'])->toBe(2)->and($targets)->toBe(['amount', 'order_id'])
         ->and(collect($matched['columns'])->pluck('target_type')->all())->toBe(['integer', 'integer'])
-        ->and(array_keys(MappingForm::existingColumns('sales')))->toEqualCanonicalizing(['order_id', 'order_date', 'name', 'product_price', 'amount'])
-        ->and(MappingForm::typeHint('sales', $returns->columns()->where('header', 'reason')->value('id'), 'my_reason'))->toBe('Recommended: String (up to 255 chars)')
-        ->and(MappingForm::typeHint('sales', $returns->columns()->where('header', 'reason')->value('id'), 'amount'))->toBe('Set by the existing column (bigint).')
-        ->and((string) MappingForm::typeNote('sales', $returns->columns()->where('header', 'return_date')->value('id'), 'returned_on', 'string'))
-        ->toContain('New column, added to sales')->toContain('Values are converted to String')
-        ->and((string) MappingForm::overview('sales', $paris->id, $matched['columns']))
+        ->and(array_keys(MappingForm::existingColumns('demo_sales')))->toEqualCanonicalizing(['order_id', 'order_date', 'name', 'product_price', 'amount'])
+        ->and(MappingForm::typeHint('demo_sales', $returns->columns()->where('header', 'reason')->value('id'), 'my_reason'))->toBe('Recommended: String (up to 255 chars)')
+        ->and(MappingForm::typeHint('demo_sales', $returns->columns()->where('header', 'reason')->value('id'), 'amount'))->toBe('Set by the existing column (bigint).')
+        ->and((string) MappingForm::typeNote('demo_sales', $returns->columns()->where('header', 'return_date')->value('id'), 'returned_on', 'string'))
+        ->toContain('New column, added to demo_sales')->toContain('Values are converted to String')
+        ->and((string) MappingForm::overview('demo_sales', $paris->id, $matched['columns']))
         ->toContain('← amount')->toContain('not filled by this file');
 
     Livewire::test(CreateMapping::class)
         ->fillForm(['source_table_id' => $paris->id, 'target_mode' => 'existing', 'managed_table_id' => $sales->id])
-        ->assertSee('Columns of sales')
+        ->assertSee('Columns of demo_sales')
         ->assertSee('Map matching columns');
 });
 
 it('filters a target table by the file its rows came from', function () {
     $london = SourceTable::query()->where('name', 'London orders')->first();
 
-    Livewire::test(BrowseManagedTable::class, ['record' => ManagedTable::query()->where('name', 'sales')->first()->getRouteKey()])
+    Livewire::test(BrowseManagedTable::class, ['record' => ManagedTable::query()->where('name', 'demo_sales')->first()->getRouteKey()])
         ->filterTable('source', $london->id)
         ->assertCountTableRecords($london->records()->whereNull('removed_at')->count());
 });
@@ -226,7 +226,7 @@ it('saves a column under any name and with a type other than the recommended one
 });
 
 it('shows a syncing state on the table page while a sync is queued, and polls until it is done', function () {
-    $sales = ManagedTable::query()->where('name', 'sales')->first();
+    $sales = ManagedTable::query()->where('name', 'demo_sales')->first();
     $spreadsheet = Spreadsheet::query()->where('google_id', 'demo-shop-london')->first();
     $page = fn () => Livewire::test(BrowseManagedTable::class, ['record' => $sales->getRouteKey()]);
 
@@ -248,7 +248,7 @@ it('clears the syncing flag when the queued sync has run', function () {
 
 it('opens the existing mapping when the sheet table already saves into the chosen table, and hides used columns', function () {
     $london = SourceTable::query()->where('name', 'London orders')->first();
-    $sales = ManagedTable::query()->where('name', 'sales')->first();
+    $sales = ManagedTable::query()->where('name', 'demo_sales')->first();
     $mapping = Mapping::query()->where('source_table_id', $london->id)->where('managed_table_id', $sales->id)->first();
 
     Livewire::test(CreateMapping::class)
@@ -265,8 +265,8 @@ it('opens the existing mapping when the sheet table already saves into the chose
 
 it('keeps saved mapping rows locked: renaming the database column is ignored, no column is added', function () {
     $london = SourceTable::query()->where('name', 'London orders')->first();
-    $mapping = Mapping::query()->where('source_table_id', $london->id)->whereHas('managedTable', fn ($q) => $q->where('name', 'sales'))->first();
-    $before = Schema::getColumnListing('sales');
+    $mapping = Mapping::query()->where('source_table_id', $london->id)->whereHas('managedTable', fn ($q) => $q->where('name', 'demo_sales'))->first();
+    $before = Schema::getColumnListing('demo_sales');
 
     $page = Livewire::test(EditMapping::class, ['record' => $mapping->getRouteKey()]);
     $columns = $page->get('data.columns');
@@ -276,11 +276,11 @@ it('keeps saved mapping rows locked: renaming the database column is ignored, no
     $page->set('data.columns', $columns)->call('save');
 
     expect($mapping->columns()->pluck('target_column')->all())->not->toContain('renamed_column')
-        ->and(Schema::getColumnListing('sales'))->toEqualCanonicalizing($before);
+        ->and(Schema::getColumnListing('demo_sales'))->toEqualCanonicalizing($before);
 });
 
 it('syncs from the mapping page and opens the table data', function () {
-    $mapping = Mapping::query()->whereHas('managedTable', fn ($q) => $q->where('name', 'sales'))->first();
+    $mapping = Mapping::query()->whereHas('managedTable', fn ($q) => $q->where('name', 'demo_sales'))->first();
 
     Livewire::test(EditMapping::class, ['record' => $mapping->getRouteKey()])
         ->callAction('syncNow')
@@ -291,7 +291,7 @@ it('syncs from the mapping page and opens the table data', function () {
 
 it('sets Compare per column on the mapping page, also for saved rows', function () {
     $london = SourceTable::query()->where('name', 'London orders')->first();
-    $mapping = Mapping::query()->where('source_table_id', $london->id)->whereHas('managedTable', fn ($q) => $q->where('name', 'sales'))->first();
+    $mapping = Mapping::query()->where('source_table_id', $london->id)->whereHas('managedTable', fn ($q) => $q->where('name', 'demo_sales'))->first();
     $amount = $london->columns()->where('header', 'amount')->first();
 
     $page = Livewire::test(EditMapping::class, ['record' => $mapping->getRouteKey()]);
@@ -324,7 +324,7 @@ it('shows open alerts and changes waiting for review in a banner on other pages'
 
 it('exports from the sheet tables and target tables lists', function () {
     $london = SourceTable::query()->where('name', 'London orders')->first();
-    $sales = ManagedTable::query()->where('name', 'sales')->first();
+    $sales = ManagedTable::query()->where('name', 'demo_sales')->first();
 
     Livewire::test(ListSourceTables::class)->callTableAction('export_csv', $london)->assertFileDownloaded();
     Livewire::test(ListManagedTables::class)->callTableAction('export_xlsx', $sales)->assertFileDownloaded();

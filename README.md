@@ -25,7 +25,7 @@ The app runs in an **Ubuntu 24.04** container (PHP 8.4, nginx, queue worker and 
 ```bash
 git clone <repository-url> sheets-sync && cd sheets-sync
 docker compose up -d --build          # first start installs dependencies and runs migrations (~1–2 min)
-docker compose exec app php artisan sheets:demo    # optional: load demo data, no Google account needed
+docker compose exec app php artisan sheets:demo    # optional: load demo data (or use Spreadsheets → Demo data)
 ```
 
 Open **http://localhost:8000/admin** and log in with **admin@example.com / password**.
@@ -179,15 +179,17 @@ Everything follows the shared files: other files, their changes, alerts and sync
 
 ## Demo scenarios
 
-`php artisan sheets:demo` loads three spreadsheets, stored as JSON in `storage/app/demo`:
+The demo lets you try everything without a Google account: three example spreadsheets stored as JSON files in `storage/app/demo`. Load or remove it with **Spreadsheets → Demo data → Load demo data / Remove demo data** (admins), or `php artisan sheets:demo` / `php artisan sheets:demo --remove`.
+
+It lives next to your real data without touching it: demo spreadsheets have `demo-…` IDs and are read from the JSON files (every other spreadsheet is read from Google), and their rows go into separate tables, **`demo_sales`**, **`demo_customers`** and **`demo_returns`**. Removing the demo deletes only those spreadsheets and tables.
 
 | Spreadsheet | Shows |
 |---|---|
 | **Shop London** | key mode (`order_id`), auto mode, currency-formatted prices, an unmapped `notes` column |
 | **Shop Paris** | headers at **H99**, columns in another order, an extra `region` column, review mode |
-| **Online Orders** | no ID column (content mode); **one tab → two tables** (`sales` + `customers`); a `#DIV/0!` row and a `TOTAL` row that get skipped; a second **Returns** table stacked below |
+| **Online Orders** | no ID column (content mode); **one tab → two tables** (`demo_sales` + `demo_customers`); a `#DIV/0!` row and a `TOTAL` row that get skipped; a second **Returns** table stacked below |
 
-London, Paris and Online all write into the same `sales` table, which shows many files → one table. The first sync imports every table right away, so the review inbox starts empty: simulate edits to fill it.
+London, Paris and Online all write into the same `demo_sales` table, which shows many files → one table. The first sync imports every table right away, so the review inbox starts empty: simulate edits to fill it.
 
 To simulate edits, then sync and watch the review inbox and alerts:
 
@@ -203,7 +205,7 @@ php artisan sheets:demo-change reset          # back to the original demo data
 php artisan sheets:sync --now
 ```
 
-(With Docker, prefix each command with `docker compose exec app`.) Demo mode can be turned off in Settings → Google connection to use real Google Sheets.
+(With Docker, prefix each command with `docker compose exec app`.)
 
 ## Edge cases
 
@@ -238,7 +240,7 @@ The full list with examples is in [docs/PLAN.md](docs/PLAN.md#12-edge-cases). Mo
 |---|---|
 | `php artisan sheets:sync [--file=] [--now] [--allow-mass-removal]` | Sync all (or one) spreadsheets: queued, or inline with `--now` |
 | `php artisan google:configure [--client-json=path]` | Store the OAuth client and API key, encrypted (hidden input) |
-| `php artisan sheets:demo [--fresh]` | Load the demo setup |
+| `php artisan sheets:demo [--fresh] [--remove]` | Load the demo (into `demo_` tables), start it over, or remove it |
 | `php artisan sheets:demo-change <scenario>` | Simulate edits in the demo sheets |
 | `php artisan sheets:admin <email> [--password=]` | Create the admin account if it doesn't exist |
 

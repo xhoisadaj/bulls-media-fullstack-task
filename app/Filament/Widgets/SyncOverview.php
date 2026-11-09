@@ -26,7 +26,6 @@ class SyncOverview extends StatsOverviewWidget
         $lastRun = SyncRunResource::getEloquentQuery()->latest('id')->first();
 
         $connection = match (true) {
-            $settings->use_demo_data => ['Demo data', 'warning'],
             $settings->oauth_status === ConnectionStatus::Connected => ['OAuth: '.($settings->oauth_email ?? 'connected'), 'success'],
             $settings->secret('api_key') !== null => ['API key only', 'warning'],
             default => ['Not connected', 'danger'],
