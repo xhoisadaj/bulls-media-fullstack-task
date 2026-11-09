@@ -6,6 +6,7 @@ use App\Enums\ChangeStatus;
 use App\Enums\ChangeType;
 use App\Filament\Resources\PendingChanges\Pages\ListPendingChanges;
 use App\Models\PendingChange;
+use App\Models\SourceRecord;
 use App\Models\SourceTable;
 use App\Sync\ChangeApplier;
 use App\Sync\RecordMatcher;
@@ -100,9 +101,11 @@ class PendingChangeResource extends Resource
                     ->color('danger')
                     ->visible(fn (PendingChange $record) => $record->status === ChangeStatus::Pending)
                     ->requiresConfirmation()
-                    ->modalDescription(fn (PendingChange $record) => $record->type === ChangeType::Removed
-                        ? 'The row stays in the database, and its removal won\'t be raised again unless the row comes back and disappears again.'
-                        : 'This exact version won\'t be raised again. A new edit of the row will create a new change.')
+                    ->modalDescription(fn (PendingChange $record) => match (true) {
+                        $record->type === ChangeType::Removed => 'The row stays in the database, and its removal won\'t be raised again unless the row comes back and disappears again.',
+                        $record->matched_by === RecordMatcher::BY_POSITION => 'Nothing changes in the database now. You are saying this is not the same row: on the next sync the old row ('.SourceRecord::codeFor((int) $record->source_record_id).') is shown as removed and the sheet row as a new row, both for your approval.',
+                        default => 'Nothing changes in the database: it keeps the old values, and this exact version won\'t be raised again. A new edit of the row will create a new change.',
+                    })
                     ->action(fn (PendingChange $record) => self::decide(collect([$record]), approve: false)),
             ])
             ->toolbarActions([
